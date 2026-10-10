@@ -1,0 +1,76 @@
+const SB='https://qbeppmgyrxpyhzchswdw.supabase.co/rest/v1/';
+const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZXBwbWd5cnhweWh6Y2hzd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NDcwOTksImV4cCI6MjEwNzIyMzA5OX0.mbgQV8L7moc5Xk39e7BokEAlbj69Ypp-zZI4MdhnJN4';
+// روابط المبرمج - عدّلها
+const SOCIAL={whatsapp:'https://wa.me/01004335462',instagram:'https://www.instagram.com/mohamed_alsayid995?igsi=MW85ZnI1ZzdocTJiMg==',facebook:'https://www.facebook.com/share/19fn8XxSSa/'};
+const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+async function api(path,method='GET',body,prefer){
+  prefer=prefer||(method=='POST'?'return=representation':'return=minimal');
+  const r=await fetch(SB+path,{method,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',Prefer:prefer},body:body?JSON.stringify(body):undefined});
+  const t=await r.text(); if(!r.ok) throw new Error(t); return t?JSON.parse(t):null}
+const rpc=(f,a)=>api('rpc/'+f,'POST',a);
+const me=()=>JSON.parse(localStorage.getItem('u')||'null');
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=t=>(t||'').slice(0,5);
+const ROLE={student:'طالب',lecturer:'محاضر',admin:'أدمن',assistant:'مساعد أدمن'};
+const P={user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',grad:'<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',chat:'<path d="M21 12a8 8 0 0 1-12 7l-5 1 1-4A8 8 0 1 1 21 12z"/>',swap:'<path d="M4 8h14l-3-3M20 16H6l3 3"/>',mega:'<path d="M3 11v3l14 5V6z"/><path d="M7 15l1 5h3l-1-4"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',inbox:'<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',plus:'<path d="M12 5v14M5 12h14"/>',key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',up:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',chart:'<path d="M4 20V4M4 20h16M8 16v-5M13 16V8M18 16v-3"/>',warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/>',table:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/>',users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-4 3-6 7-6s7 2 7 6M17 5a3.5 3.5 0 0 1 0 7M22 20c0-3-2-5-4-5.5"/>',shield:'<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>',board:'<rect x="3" y="4" width="18" height="11" rx="1"/><path d="M12 15v5M8 20h8"/>',clip:'<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',home:'<path d="M3 11l9-7 9 7v9H3z"/><path d="M9 20v-6h6v6"/>',bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',out:'<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',ig:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5v.01"/>',fb:'<path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8z"/>',wa:'<path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.3z"/><path d="M9 9c0 3 3 6 6 6l1.5-1.5-2-1-1 .8c-1-.4-2-1.4-2.4-2.4l.8-1-1-2z"/>',dot:'<circle cx="12" cy="12" r="3"/>'};
+const ic=(n,z=20)=>`<svg width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]||P.dot}</svg>`;
+const MAP={'بياناتي':'user','جدولي':'cal','غيابي':'check','درجاتي':'grad','شكوى':'chat','طلب تغيير':'swap','الإعلانات':'mega','تسجيل الغياب':'clip','ملفي':'user','الرئيسية':'home','الطلبات':'inbox','الشكاوى':'chat','إعلان':'mega','طالب جديد':'plus','جروب جديد':'cal','حسابات':'key','رفع إكسيل':'up','التقارير':'chart','الدرجات':'grad','الغياب والإنذارات':'warn','الجداول ونقل الطلاب':'table','تعديل الغياب':'pen','رفع طلاب':'users','المحاضرون':'board','الصلاحيات':'shield'};
+const DESC={'بياناتي':'الملف الشخصي وكلمة المرور','جدولي':'اليوم والمكان والمحاضر والتوقيت','غيابي':'حضورك الأسبوعي والشهري والترم','درجاتي':'الكويزات والاختبارات والتقييمات','شكوى':'أرسل شكوى أو تعارضاً','طلب تغيير':'طلب نقل إلى جروب آخر','الإعلانات':'جداول الاختبارات والتنبيهات','تسجيل الغياب':'سجّل حضور طلاب جروبات اليوم','ملفي':'الهاتف وكلمة المرور'};
+function guard(roles){const u=me();if(!u||!roles.includes(u.role)){location='index.html';throw 0}return u}
+function logout(){localStorage.removeItem('u');location='index.html'}
+async function count(t,c,f=''){const r=await fetch(`${SB}${t}?select=${c}${f}`,{method:'HEAD',headers:{apikey:KEY,Authorization:'Bearer '+KEY,Prefer:'count=exact'}});return +(r.headers.get('content-range')||'/0').split('/')[1]}
+function shell(u){
+  const side=u&&['admin','assistant'].includes(u.role);
+  document.body.insertAdjacentHTML('afterbegin',`<header>${side?`<button class="menu" aria-label="القائمة" onclick="document.body.classList.toggle('open')">${ic('menu',22)}</button>`:''}<img src="assets/logo.png" alt="" onerror="this.style.visibility='hidden'"><h1>جامعة الصالحية الجديدة<small>كورس اللغة الإنجليزية</small></h1>${u?`<div class="who"><b>${esc(u.name)}</b><small>${ROLE[u.role]} · ${esc(u.code)}</small></div><button class="bell" id="bell" aria-label="الإشعارات">${ic('bell')}<b>0</b></button><button class="out" onclick="logout()" aria-label="خروج">${ic('out')}</button>`:''}</header>`);
+  document.body.insertAdjacentHTML('beforeend',`<footer><div class="soc"><a href="${SOCIAL.whatsapp}" aria-label="واتساب">${ic('wa',22)}</a><a href="${SOCIAL.instagram}" aria-label="إنستجرام">${ic('ig',22)}</a><a href="${SOCIAL.facebook}" aria-label="فيسبوك">${ic('fb',22)}</a></div><small>M.H.D</small></footer>`);
+  if(u){const poll=async()=>{try{const n=await api(`notifications?target_code=eq.${u.code}&read=eq.false&order=id.desc`);$('#bell b').textContent=n.length;$('#bell').onclick=async()=>{alert(n.map(x=>x.title+'\n'+(x.body||'')).join('\n\n')||'لا توجد إشعارات');if(n.length)await api(`notifications?target_code=eq.${u.code}&read=eq.false`,'PATCH',{read:true});poll()}}catch(e){}};poll();setInterval(poll,20000)}}
+function lay(box){box.querySelectorAll('.card>label').forEach(l=>{const i=l.nextElementSibling;if(i&&/^(INPUT|SELECT|TEXTAREA)$/.test(i.tagName)){const w=document.createElement('div');w.className='f';l.replaceWith(w);w.append(l,i)}})}
+function tabs(defs,box){
+  const u=me(),side=['admin','assistant'].includes(u.role),h=document.createElement('h2');h.className='pt';
+  new MutationObserver(()=>lay(box)).observe(box,{childList:true,subtree:true});
+  const run=async(l,f)=>{h.textContent=l;box.innerHTML='<div class="msg">جارٍ التحميل...</div>';try{await f(box)}catch(e){box.innerHTML='<div class="msg">حدث خطأ: '+esc(e.message)+'</div>'}};
+  if(side){document.body.classList.add('has-side');const nav=document.createElement('nav');nav.className='side';document.body.append(nav);box.before(h);
+   defs.forEach(([l,f],i)=>{const b=document.createElement('button');b.innerHTML=ic(MAP[l]||'dot',19)+'<span>'+l+'</span>';b.onclick=()=>{[...nav.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');document.body.classList.remove('open');run(l,f)};nav.append(b);if(!i)b.click()});
+   document.addEventListener('click',e=>{if(!e.target.closest('nav,.menu'))document.body.classList.remove('open')});return}
+  const g=document.createElement('div'),sh=document.createElement('section'),hd=document.createElement('div'),x=document.createElement('button');
+  g.className='home';g.innerHTML=`<div class="hero"><small>مرحباً بك</small><h2>${esc(u.name)}</h2><span>${ROLE[u.role]} · ${esc(u.code)}</span></div><div class="tiles"></div>`;
+  sh.className='sheet';sh.hidden=true;hd.className='sh';x.className='x';x.textContent='إغلاق';hd.append(h,x);box.before(g);box.before(sh);sh.append(hd,box);
+  x.onclick=()=>{sh.hidden=true;g.hidden=false;scrollTo(0,0)};
+  defs.forEach(([l,f])=>{const t=document.createElement('button');t.className='tile';t.innerHTML=`<span class="ic">${ic(MAP[l]||'dot',26)}</span><b>${l}</b><small>${DESC[l]||''}</small>`;t.onclick=()=>{g.hidden=true;sh.hidden=false;scrollTo(0,0);run(l,f)};g.querySelector('.tiles').append(t)})}
+async function notify(codes,title,body){if(codes.length)await api('notifications','POST',codes.map(c=>({target_code:c,title,body})),'return=minimal')}
+async function changePassForm(box,u){
+  box.insertAdjacentHTML('beforeend',`<div class="card"><h3>تغيير كلمة المرور</h3><label>الحالية</label><input type="password" id="o"><label>الجديدة</label><input type="password" id="n"><button class="btn" id="cp">حفظ كلمة المرور</button></div>`);
+  $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('change_password',{p_code:u.code,p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
+
+  
+
+// منع القائمة المنسدلة عند الضغط بزر الفأرة الأيمن
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    // منع اختصارات لوحة المفاتيح الخاصة بأدوات المطور
+    document.addEventListener('keydown', function(e) {
+        // منع F12
+        if (e.key === "F12") {
+            e.preventDefault();
+        }
+        // منع Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) {
+            e.preventDefault();
+        }
+        // منع Ctrl+U (عرض مصدر الصفحة)
+        if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
+            e.preventDefault();
+        }
+    });
+    setInterval(function() {
+        const startTime = performance.now();
+        debugger; // يوقف تنفيذ الكود إذا كانت أدوات المطور مفتوحة
+        const endTime = performance.now();
+        if (endTime - startTime > 100) {
+            // إذا اكتشف فتح F12، يتم توجيه المستخدم أو إعادة تحميل الصفحة
+            window.location.reload();
+        }
+    }, 1000);
