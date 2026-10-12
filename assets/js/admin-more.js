@@ -9,8 +9,8 @@ const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'})
 // ===== رفع الطلاب فقط =====
 const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
  ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022']],'students_template.xlsx'),
- async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place')).map(s=>[s.code,s]));
-  const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null}});
+ async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place,is_new')).map(s=>[s.code,s]));
+  const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
   await api('students?on_conflict=code','POST',out,'resolution=merge-duplicates,return=minimal');return`تمت معالجة ${out.length} طالب`});
 
 // ===== رفع المحاضرين والتوقيتات =====
@@ -27,8 +27,9 @@ const lecTab=b=>upBox(b,'رفع / تحديث المحاضرين وتوقيتات
 async function gradesTab(b){
  const ex=await api('exams?order=id');
  b.innerHTML=`<div class="card"><h3>إنشاء اختبار / تقييم</h3><label>الاسم</label><input id="en"><label>النوع</label><select id="ek"><option value="quiz">كويز</option><option value="midterm">اختبار فصلي</option><option value="final">اختبار نهاية العام</option><option value="weekly">تقييم أسبوعي</option><option value="monthly">تقييم شهري</option></select><label>الدرجة العظمى</label><input id="em" type="number" value="10"><button class="btn" id="ea">إضافة</button></div>
- <div class="card"><h3>الاختبارات الحالية</h3>${ex.map(e=>`<span class="pill">${esc(e.name)} (${e.max_mark}) <a href="#" data-d="${e.id}" class="bad">✕</a></span> `).join('')||'لا يوجد'}</div><div id="up"></div>`;
+ <div class="card"><h3>الاختبارات الحالية</h3>${ex.map(e=>`<span class="pill">${esc(e.name)} (${e.max_mark}) · <a href="#" data-p="${e.id}" data-v="${e.published?0:1}">${e.published?'منشور — إخفاء':'مخفي — نشر'}</a> <a href="#" data-d="${e.id}" class="bad">✕</a></span> `).join('')||'لا يوجد'}</div><div id="up"></div>`;
  $('#ea').onclick=async()=>{await api('exams','POST',{name:$('#en').value,kind:$('#ek').value,max_mark:+$('#em').value},'return=minimal');gradesTab(b)};
+ b.querySelectorAll('[data-p]').forEach(a=>a.onclick=async e=>{e.preventDefault();const v=a.dataset.v=='1';await api('exams?id=eq.'+a.dataset.p,'PATCH',{published:v});if(v){const x=ex.find(q=>q.id==a.dataset.p);notify((await all('students?select=code')).map(q=>q.code),'تم نشر درجات',x.name)}gradesTab(b)});
  b.querySelectorAll('[data-d]').forEach(a=>a.onclick=async e=>{e.preventDefault();if(confirm('حذف الاختبار ودرجاته؟')){await api('exams?id=eq.'+a.dataset.d,'DELETE',null,'return=minimal');gradesTab(b)}});
  upBox($('#up'),'رفع الدرجات','الصف الأول: Code ثم أسماء الاختبارات كأعمدة، ويمكن كتابة الدرجة العظمى بين قوسين مثل Quiz 1 (10). الاختبار الجديد يُنشأ تلقائياً.',
   ()=>dl([['Code','Name','Quiz 1 (10)','Midterm (30)'],['261541','اسم الطالب',8,25]],'grades_template.xlsx'),
@@ -36,7 +37,7 @@ async function gradesTab(b){
    for(const c of cols){const m=c.match(/^(.*?)\s*\((\d+(?:\.\d+)?)\)\s*$/),nm=m?m[1]:c;if(!have[nm])[have[nm]]=await api('exams','POST',{name:nm,max_mark:m?+m[2]:100})}
    const codes=new Set((await all('students?select=code')).map(s=>s.code));let g=[],skip=0;
    rows.forEach(r=>{const c=S(r.Code);if(!codes.has(c)){skip++;return}cols.forEach(k=>{if(r[k]==null||r[k]==='')return;const nm=(k.match(/^(.*?)\s*\(/)||[0,k])[1];g.push({exam_id:have[nm].id,student_code:c,mark:+r[k]})})});
-   await api('grades?on_conflict=exam_id,student_code','POST',g,'resolution=merge-duplicates,return=minimal');await notify([...new Set(g.map(x=>x.student_code))],'تم تحديث درجاتك','راجع قسم درجاتي');
+   await api('grades?on_conflict=exam_id,student_code','POST',g,'resolution=merge-duplicates,return=minimal');
    return`تم رفع ${g.length} درجة، وتخطي ${skip} كود غير مسجل`})}
 
 // ===== شروط الغياب والإنذارات =====
@@ -81,35 +82,3 @@ async function permTab(b){
  const as=await api('staff?role=eq.assistant&select=code,name,perms');
  b.innerHTML=as.map(a=>`<div class="card"><h3>${esc(a.name)} (${a.code})</h3>${TABNAMES.filter(t=>t!='الصلاحيات'&&t!='حسابات').map(t=>`<label style="display:inline-block;margin-inline-end:14px"><input type="checkbox" data-a="${a.code}" value="${t}" ${a.perms?.[t]?'checked':''}> ${t}</label>`).join('')}<br><button class="btn" data-s="${a.code}">حفظ</button></div>`).join('')||'لا يوجد مساعدون. أنشئهم من تبويب حسابات.';
  b.querySelectorAll('[data-s]').forEach(k=>k.onclick=async()=>{const p={};b.querySelectorAll(`[data-a="${k.dataset.s}"]:checked`).forEach(c=>p[c.value]=true);await api('staff?code=eq.'+k.dataset.s,'PATCH',{perms:p});alert('تم حفظ الصلاحيات')})}
-
- 
-
-// منع القائمة المنسدلة عند الضغط بزر الفأرة الأيمن
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
-
-    // منع اختصارات لوحة المفاتيح الخاصة بأدوات المطور
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12") {
-            e.preventDefault();
-        }
-        // منع Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
-        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) {
-            e.preventDefault();
-        }
-        // منع Ctrl+U (عرض مصدر الصفحة)
-        if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
-            e.preventDefault();
-        }
-    });
-    setInterval(function() {
-        const startTime = performance.now();
-        debugger; // يوقف تنفيذ الكود إذا كانت أدوات المطور مفتوحة
-        const endTime = performance.now();
-        if (endTime - startTime > 100) {
-            // إذا اكتشف فتح F12، يتم توجيه المستخدم أو إعادة تحميل الصفحة
-            window.location.reload();
-        }
-    }, 1000);
