@@ -8,21 +8,21 @@ const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${titl
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
 // ===== رفع الطلاب فقط =====
-const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
+const studentsUploadTab=b=>{upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
  ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022']],'students_template.xlsx'),
  async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place,is_new')).map(s=>[s.code,s]));
   const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
-  const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
+  const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});return studentSearch(b)};
 
 // ===== رفع المحاضرين والتوقيتات =====
 const LA={code:['code','كود','الكود','lecturercode'],name:['name','الاسم','اسم'],phone:['phone','mobile','tel','الهاتف','رقمالهاتف'],role:['role','الصلاحية'],day:['day','اليوم'],from:['from','start','starttime','من'],to:['to','end','endtime','الى','إلى'],cls:['class','classroom','room','place','كلاس','الكلاس'],level:['level','englishlevel','الليفل']};
 const lecRow=r=>{const K={};Object.keys(r).forEach(k=>K[k.toLowerCase().replace(/[\s_.\-]/g,'')]=r[k]);const o={};for(const f in LA){const k=LA[f].find(n=>K[n]!=null&&K[n]!=='');o[f]=k?K[k]:null}return o};
 const mins=t=>{const [h,m]=String(t).split(':');return +h*60+ +m};
 // مطابقة الجروب: نفس اليوم + نفس الكلاس، ثم التوقيت (مطابق تماماً أو متداخل)
-const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p)),A=mins(f),B=mins(t),df=s=>[Math.abs(mins(fmt(s.start_time))-A),Math.abs(mins(fmt(s.end_time))-B)];
- let hit=same.filter(s=>{const [x,y]=df(s);return x==0&&y==0});if(hit.length)return{hit,how:'exact'};
- hit=same.filter(s=>{const [x,y]=df(s);return x<=15&&y<=15});if(hit.length)return{hit:[hit.sort((u,v)=>df(u)[0]+df(u)[1]-df(v)[0]-df(v)[1])[0]],how:'near'};
- return{hit:[],why:same.length?'الكلاس له مواعيد أخرى في هذا اليوم ('+same.map(s=>fmt(s.start_time)+'-'+fmt(s.end_time)).join('، ')+')':'لا يوجد هذا الكلاس في هذا اليوم'}};
+const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p));
+ let hit=same.filter(s=>mins(fmt(s.start_time))==mins(f)&&mins(fmt(s.end_time))==mins(t));if(hit.length)return{hit,how:'exact'};
+ hit=same.filter(s=>mins(fmt(s.start_time))<mins(t)&&mins(fmt(s.end_time))>mins(f));if(hit.length)return{hit,how:'overlap'};
+ return{hit:[],why:same.length?'الكلاس موجود في هذا اليوم لكن بتوقيت مختلف ('+same.map(s=>fmt(s.start_time)+'-'+fmt(s.end_time)).join('، ')+')':'لا يوجد هذا الكلاس في هذا اليوم'}};
 const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','ارفع هذا الملف بعد رفع جدول الطلاب. يربط كل محاضر بالجروبات المطابقة (نفس اليوم والكلاس والوقت) دون المساس بالطلاب. الأعمدة: Code, Name, Phone, Role, Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم.',
  ()=>dl([['Code','Name','Phone','Role','Day','From','To','Class','Level'],['L100','د. أحمد','01000000000','lecturer','Monday','9:00 AM','11:00 AM','c0012','A1'],['L100','د. أحمد','01000000000','lecturer','Monday','11:30 AM','3:30 PM','c0020','C1']],'lecturers_template.xlsx'),
  async rows0=>{const rows=[...new Map(rows0.map(lecRow).filter(r=>S(r.code)).map(r=>[[S(r.code),r.day,r.from,r.to,r.cls].join('|'),r])).values()];
@@ -35,11 +35,11 @@ const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتا�
    let d,f,t;try{d=dayOf(r.day);f=tm(r.from);t=tm(r.to)}catch(e){sk.push(S(r.code)+': وقت غير مفهوم ('+r.from+' / '+r.to+')');continue}
    const p=S(r.cls)||'',c=S(r.code),m=lecMatch(sl,d,f,t,p);
    if(m.hit.length){for(const s of m.hit){await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:c});s.lecturer_code=c}if(m.how=='exact')ex+=m.hit.length;else ov+=m.hit.length;L[c]=(L[c]||0)+m.hit.length}
-   else if(mk){const sib=sl.find(s=>nzp(s.place)==nzp(p)),[n]=await api('slots','POST',{day:d,start_time:f,end_time:t,place:sib?sib.place:p,level:S(r.level)||sib?.level||null,lecturer_code:c});sl.push(n);cr.push(d+' '+f+'-'+t+' '+p);L[c]=(L[c]||0)+1}
+   else if(mk){const [n]=await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:S(r.level),lecturer_code:c});sl.push(n);cr.push(d+' '+f+'-'+t+' '+p);L[c]=(L[c]||0)+1}
    else sk.push(`${c} | ${d} ${f}-${t} | كلاس ${p} ← ${m.why}`)}
   for(const c in L)await notify([c],'تحديث جدولك','تم ربطك بـ '+L[c]+' جروب. راجع جدول محاضراتك');
-  return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت مقارب (±15 دقيقة): ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
- b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk" checked> إنشاء الموعد تلقائياً إذا لم يوجد جروب بنفس اليوم والكلاس والوقت (مثل كلاس له موعدان بمحاضرين مختلفين)</label>')};
+  return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت متداخل: ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
+ b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: ربط المحاضر فقط)</label>')};
 
 // ===== الدرجات =====
 async function gradesTab(b){
@@ -79,7 +79,7 @@ async function moveTab(b){
   $('#ed').innerHTML=`<label>اليوم</label><select id="d">${DAYS.map(d=>`<option ${d==s.day?'selected':''}>${d}</option>`).join('')}</select><label>من</label><input type="time" id="f" value="${fmt(s.start_time)}"><label>إلى</label><input type="time" id="e" value="${fmt(s.end_time)}"><label>المكان</label><input id="p" value="${esc(s.place)}"><label>الليفل</label><input id="l" value="${esc(s.level)}"><label>المحاضر</label><select id="lc"><option value="">-</option>${lec.map(x=>`<option value="${x.code}" ${x.code==s.lecturer_code?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button class="btn alt" id="sv">حفظ التعديل</button> <button class="btn no" id="rm">حذف الجروب</button>`;
   $('#sv').onclick=async()=>{await api('slots?id=eq.'+id,'PATCH',{day:$('#d').value,start_time:$('#f').value,end_time:$('#e').value,place:$('#p').value,level:$('#l').value,lecturer_code:$('#lc').value||null});const en=await api('enrollments?slot_id=eq.'+id+'&select=student_code');notify(en.map(x=>x.student_code),'تغيير في الجدول','تم تعديل موعد أو مكان جروبك');moveTab(b)};
   $('#rm').onclick=async()=>{if(confirm('حذف الجروب؟')){await api('slots?id=eq.'+id,'DELETE',null,'return=minimal');moveTab(b)}};
-  const en=await api('enrollments?slot_id=eq.'+id+'&select=student:students(code,name)');$('#ls').innerHTML=en.map(x=>`<div class="stud" onclick="this.classList.toggle('p')" data-c="${x.student.code}">${esc(x.student.name)}<small>${x.student.code}</small></div>`).join('')||'لا يوجد طلاب'};
+  const en=await api('enrollments?slot_id=eq.'+id+'&select=student:students(code,name)');$('#ls').innerHTML=en.map(x=>`<div class="stud" onclick="this.classList.toggle('p')" data-c="${x.student.code}">${esc(x.student.name)}<small>${x.student.code}</small>${EDB(x.student.code)}</div>`).join('')||'لا يوجد طلاب';bindEdit($('#ls'))};
  $('#a').onchange=load;load();
  $('#mv').onclick=async()=>{const c=[...document.querySelectorAll('.stud.p')].map(d=>d.dataset.c);if(!c.length)return alert('حدد طلاباً');const from=$('#a').value,to=$('#t').value;if(from==to)return;
   await api(`enrollments?slot_id=eq.${from}&student_code=in.(${c.join(',')})`,'DELETE',null,'return=minimal');await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x,slot_id:+to})),'resolution=merge-duplicates,return=minimal');await notify(c,'تم نقلك','تم تعديل جدولك');alert('تم النقل');load()}}
@@ -90,7 +90,7 @@ async function attTab(b){
  const sl=await all('slots?order=day,start_time');
  b.innerHTML=`<div class="card"><label>الجروب</label><select id="a">${sl.map(s=>`<option value="${s.id}">${s.day} ${fmt(s.start_time)} | ${esc(s.place)}</option>`).join('')}</select><label>التاريخ</label><input type="date" id="dt" value="${today()}"></div><div id="l"></div>`;
  const load=async()=>{const id=$('#a').value,d=$('#dt').value;const [en,at]=await Promise.all([api('enrollments?slot_id=eq.'+id+'&select=student:students(code,name)'),api(`attendance?slot_id=eq.${id}&date=eq.${d}`)]);const on=new Set(at.filter(x=>x.present).map(x=>x.student_code));
-  $('#l').innerHTML=en.map(e=>`<div class="stud ${on.has(e.student.code)?'p':''}" data-c="${e.student.code}" onclick="this.classList.toggle('p')">${esc(e.student.name)}<small>${e.student.code}</small></div>`).join('')+'<button class="btn alt" id="sv">حفظ</button>';
+  $('#l').innerHTML=en.map(e=>`<div class="stud ${on.has(e.student.code)?'p':''}" data-c="${e.student.code}" onclick="this.classList.toggle('p')">${esc(e.student.name)}<small>${e.student.code}</small>${EDB(e.student.code)}</div>`).join('')+'<button class="btn alt" id="sv">حفظ</button>';bindEdit($('#l'));
   $('#sv').onclick=async()=>{await api('attendance?on_conflict=student_code,slot_id,date','POST',[...document.querySelectorAll('.stud')].map(x=>({student_code:x.dataset.c,slot_id:+id,date:d,present:x.classList.contains('p'),marked_by:me().code})),'resolution=merge-duplicates,return=minimal');alert('تم')}};
  $('#a').onchange=$('#dt').onchange=load;load()}
 
@@ -105,3 +105,39 @@ async function permTab(b){
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
+
+// ===== تعديل بيانات الطالب (نافذة مشتركة تُستخدم في كل التبويبات) =====
+const STF=[['name','الاسم'],['phone','الهاتف'],['college','الكلية'],['level','الليفل'],['section','السكشن'],['place','الكلاس المسجل في بياناته']];
+function EDB(c){return `<button type="button" class="btn alt" style="margin:0;padding:4px 12px" data-es="${esc(c)}">✎ تعديل</button>`}
+// ربط أزرار التعديل داخل صفوف .stud (تحديث الاسم مكانه دون فقد التحديد)
+function bindEdit(root){root.querySelectorAll('[data-es]').forEach(k=>k.onclick=e=>{e.stopPropagation();editStudent(k.dataset.es,s=>{const r=k.closest('.stud');if(r&&r.firstChild&&r.firstChild.nodeType==3)r.firstChild.textContent=s.name})})}
+async function editStudent(code,done){
+ try{const [s]=await api('students?code=eq.'+q(code)+'&select=code,name,phone,college,level,section,place');if(!s)return alert('الطالب غير موجود');
+  if(!document.getElementById('mdlcss'))document.head.insertAdjacentHTML('beforeend','<style id="mdlcss">.mdl{position:fixed;inset:0;z-index:100;background:#0a1a4499;display:flex;align-items:flex-start;justify-content:center;padding:70px 14px 20px;overflow:auto}.mbox{width:100%;max-width:480px;margin:0}</style>');
+  const d=document.createElement('div');d.className='mdl';
+  d.innerHTML=`<div class="card mbox"><h3>تعديل بيانات الطالب — ${esc(s.code)}</h3>${STF.map(([k,l])=>`<label>${l}</label><input data-k="${k}" value="${esc(s[k])}">`).join('')}<p class="note">تعديل الكلاس هنا لا ينقل الطالب بين الجروبات، النقل من تبويب الجداول.</p><div><button type="button" class="btn" id="msv">حفظ</button><button type="button" class="btn alt" id="mcl">إلغاء</button></div></div>`;
+  d.onclick=e=>{if(e.target==d)d.remove()};d.querySelector('#mcl').onclick=()=>d.remove();
+  d.querySelector('#msv').onclick=async()=>{const v={};d.querySelectorAll('input').forEach(i=>v[i.dataset.k]=i.value.trim()||null);if(!v.name)return alert('الاسم مطلوب');
+   try{await api('students?code=eq.'+q(code),'PATCH',v);d.remove();if(done)done({code:s.code,...v})}catch(e){alert('تعذر الحفظ: '+e.message)}};
+  document.body.append(d)}catch(e){alert(e.message)}}
+
+// ===== شاشة البحث عن طالب وتعديله (داخل تبويب رفع طلاب) =====
+async function studentSearch(b){
+ b.insertAdjacentHTML('afterbegin','<div class="card"><h3>بحث وتعديل بيانات طالب</h3><label>الاسم أو الكود</label><input id="ssq" placeholder="اسم أو كود"><label>الكلاس</label><select id="ssc"><option value="">الكل</option></select><label>الليفل</label><select id="ssl"><option value="">الكل</option></select><button class="btn" id="ssg">بحث</button></div><div id="ssr"></div>');
+ let ST=null;const nm=x=>nA(String(x??'')).replace(/ى/g,'ي').toLowerCase();
+ const load=async()=>{if(ST)return;
+  const [st,en]=await Promise.all([all('students?select=code,name,phone,college,level,section,place&order=code'),all('enrollments?select=student_code,slot:slots(day,start_time,end_time,place)&order=student_code,slot_id')]);
+  const E={},CK={};en.forEach(e=>{if(e.slot)(E[e.student_code]=E[e.student_code]||[]).push(e.slot)});
+  st.forEach(s=>{const es=E[s.code]||[];s._g=es.map(x=>`${x.day} ${fmt(x.start_time)}-${fmt(x.end_time)} | ${String(x.place).split(' - ')[0]}`);s._k=new Set();
+   (es.length?es.map(x=>x.place):[s.place]).filter(Boolean).forEach(p=>{const k=nzp(p);if(!k)return;s._k.add(k);CK[k]=CK[k]||String(p).split(' - ')[0].trim()})});
+  ST=st;
+  $('#ssc').insertAdjacentHTML('beforeend',Object.entries(CK).sort((a,b)=>a[1].localeCompare(b[1],undefined,{numeric:true})).map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join(''));
+  $('#ssl').insertAdjacentHTML('beforeend',[...new Set(st.map(s=>s.level).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join(''))};
+ const draw=()=>{const t=nm($('#ssq').value.trim()),c=$('#ssc').value,l=$('#ssl').value,o=$('#ssr');
+  if(!t&&!c&&!l){o.innerHTML='<div class="msg">اكتب اسماً أو كوداً، أو اختر كلاساً أو ليفل للبحث</div>';return}
+  const R=ST.filter(s=>(!t||nm(s.name+' '+s.code).includes(t))&&(!l||s.level==l)&&(!c||s._k.has(c))),V=R.slice(0,200);
+  o.innerHTML=`<div class="card wrap"><h3>النتائج (${R.length})${R.length>200?' — يظهر أول 200 فقط، ضيّق البحث':''}</h3><table class="table"><tr><th>الكود</th><th>الاسم</th><th>الهاتف</th><th>الكلية</th><th>الليفل</th><th>السكشن</th><th>الجروبات</th><th></th></tr>${V.map(s=>`<tr><td>${esc(s.code)}</td><td>${esc(s.name)}</td><td>${esc(s.phone)}</td><td>${esc(s.college)}</td><td>${esc(s.level)}</td><td>${esc(s.section)}</td><td>${s._g.map(x=>esc(x)).join('<br>')||esc(s.place)}</td><td>${EDB(s.code)}</td></tr>`).join('')||'<tr><td colspan="8">لا توجد نتائج</td></tr>'}</table></div>`;
+  o.querySelectorAll('[data-es]').forEach(k=>k.onclick=()=>editStudent(k.dataset.es,n=>{Object.assign(ST.find(s=>s.code==n.code),n);draw()}))};
+ $('#ssg').onclick=async()=>{try{await load();draw()}catch(e){alert(e.message)}};
+ $('#ssq').onkeydown=e=>{if(e.key=='Enter')$('#ssg').click()};$('#ssc').onchange=$('#ssl').onchange=$('#ssg').onclick;
+ load().catch(()=>{})}
