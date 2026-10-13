@@ -10,7 +10,8 @@ function parseRows(rows){const out=[];let c=null,h=false;
   if(p.length>=3&&(EN2AR[p[0].toLowerCase()]||DAYS.includes(p[0]))&&/\d:\d/.test(p[2])){const [s,e]=p[2].split(/[–-]/);c={day:EN2AR[p[0].toLowerCase()]||p[0],start:t24(s),end:t24(e),building:'',cls:'',level:'',rows:[]};out.push(c);h=false;continue}
   if(!c)continue;
   let m;if(m=a.match(/^Building:\s*([^|]*)/i)){c.building=m[1].trim();continue}
-  if(m=a.match(/^Class\s*(\S+)\s*—\s*English Level\s*(\S+)/i)){c.cls=m[1];c.level=m[2];continue}
+  const j=r.filter(x=>x!=null).join(' ');
+  if((!h||!String(r[1]??'').trim())&&/class|كلاس/i.test(j)){const mc=j.match(/(?:class(?:room)?|كلاس)\s*(?:no\.?|number|رقم)?\s*[:：#\-–—.]?\s*([A-Za-z]?\d[A-Za-z0-9]*|[A-Za-z]+[-_]?\d+)/i),ml=j.match(/level\s*[:：\-–—]?\s*([A-Za-z][A-Za-z0-9]*)/i)||j.match(/(?:class(?:room)?|كلاس)[^—–|]*[—–|-]\s*([A-Za-z]\d)\b/i);if(mc){c.cls=mc[1];if(ml)c.level=ml[1];continue}}
   if(/^(name|student name|full name|الاسم|اسم الطالب)$/i.test(a)||String(r[1]??'').trim().toLowerCase()=='code'){h=true;continue}
   if(h){if(r[1]!=null&&String(r[1]).trim())c.rows.push({name:a,code:String(r[1]).trim(),college:r[2]||null,section:r[3]||null,level:r[4]||c.level,lec:r[5]?String(r[5]).trim():null});else if(!a)h=false}}
  return out}
@@ -23,7 +24,7 @@ async function importTab(b){
  b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p><b>تنبيه:</b> عند الرفع تُحذف كل جروبات الأيام الموجودة في الملف وتُنشأ من جديد بالبيانات الجديدة. الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط دون المساس بكلمة المرور.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
  $('#tp').onclick=downloadTemplate;let blocks=[];
  $('#f').onchange=async e=>{const wb=XLSX.read(await e.target.files[0].arrayBuffer());blocks=wb.SheetNames.flatMap(n=>parseRows(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null})));
-  $('#pv').innerHTML=blocks.map(x=>`<div class="msg">${x.day} ${x.start}-${x.end} | ${esc(x.cls)} | ${esc(x.level)} | ${x.rows.length} طالب</div>`).join('')||'<div class="msg">لم يتم التعرف على أي جدول، استخدم القالب</div>';$('#go').disabled=!blocks.length};
+  const bad=blocks.filter(x=>!x.cls).length;$('#pv').innerHTML=(bad?`<div class="msg" style="background:#fde8ec;color:#8f1d33">⚠ ${bad} جدول بلا رقم كلاس — لن يتم الاستيراد. تأكد أن سطر الكلاس مثل: Class 0010 — English Level B2</div>`:'')+blocks.map(x=>`<div class="msg">${x.day} ${x.start}-${x.end} | كلاس: <b>${esc(x.cls)||'—؟'}</b> | ${esc(x.building)} | ${esc(x.level)} | ${x.rows.length} طالب</div>`).join('')||'<div class="msg">لم يتم التعرف على أي جدول، استخدم القالب</div>';$('#go').disabled=!blocks.length||bad>0};
  $('#go').onclick=async()=>{const days=[...new Set(blocks.map(x=>x.day))],old=[];for(const d of days)old.push(...await api(`slots?day=eq.${q(d)}&select=*`));
   if(!confirm(`سيتم حذف كل الجروبات الموجودة في الأيام: ${days.join('، ')} (${old.length} جروب) وإعادة إنشائها من الملف.\nيُعاد ربط المحاضرين عند تطابق اليوم والوقت والكلاس، وتبقى سجلات الغياب القديمة محفوظة. متابعة؟`))return;
   $('#go').disabled=true;const rep=[];try{
@@ -31,7 +32,7 @@ async function importTab(b){
   for(const d of days)await api('slots?day=eq.'+q(d),'DELETE');
   const isn=Object.fromEntries((await all('students?select=code,is_new')).map(r=>[r.code,r.is_new])),mk={};
   for(const x of blocks){const place=x.cls+(x.building?' - '+x.building:''),key=[x.day,x.start,x.end,nzp(x.cls)].join('|');
-   let s=mk[key],made=false,lcode=lm[key]||lm2[x.day+'|'+nzp(x.cls)]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
+   let s=mk[key],made=false,lcode=lm[key]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
    if(!s){[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level,lecturer_code:lcode});mk[key]=s;made=true}
    const R=[...new Map(x.rows.map(r=>[r.code,{code:r.code,name:r.name,college:r.college,section:r.section,level:r.level,place:x.cls}])).values()],nw=R.filter(r=>!(r.code in isn)).map(r=>({...r,is_new:true})),ex=R.filter(r=>r.code in isn);
    if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');nw.forEach(r=>isn[r.code]=true);
