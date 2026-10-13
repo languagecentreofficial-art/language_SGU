@@ -1,5 +1,6 @@
 const EN2AR={sunday:'الأحد',monday:'الاثنين',tuesday:'الثلاثاء',wednesday:'الأربعاء',thursday:'الخميس',friday:'الجمعة',saturday:'السبت'};
 const q=s=>encodeURIComponent(s);
+const nzp=s=>String(s||'').toLowerCase().replace(/^class\s*/,'').replace(/^c(?=\d)/,'').split('-')[0].trim();
 function t24(s){const m=s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);let h=+m[1];const a=(m[3]||'').toUpperCase();if(a=='PM'&&h<12)h+=12;if(a=='AM'&&h==12)h=0;if(!a&&h<7)h+=12;return String(h).padStart(2,'0')+':'+m[2]}
 async function all(path){let o=[],i=0,r;do{r=await api(path+(path.includes('?')?'&':'?')+'limit=1000&offset='+i);o=o.concat(r);i+=1000}while(r.length==1000);return o}
 // قراءة الشيت: يدعم أكثر من بلوك (يوم/وقت/مبنى/كلاس/جدول طلاب) في نفس الملف
@@ -10,7 +11,7 @@ function parseRows(rows){const out=[];let c=null,h=false;
   if(!c)continue;
   let m;if(m=a.match(/^Building:\s*([^|]*)/i)){c.building=m[1].trim();continue}
   if(m=a.match(/^Class\s*(\S+)\s*—\s*English Level\s*(\S+)/i)){c.cls=m[1];c.level=m[2];continue}
-  if(/^(Name|الاسم)$/i.test(a)){h=true;continue}
+  if(/^(name|student name|full name|الاسم|اسم الطالب)$/i.test(a)||String(r[1]??'').trim().toLowerCase()=='code'){h=true;continue}
   if(h){if(r[1]!=null&&String(r[1]).trim())c.rows.push({name:a,code:String(r[1]).trim(),college:r[2]||null,section:r[3]||null,level:r[4]||c.level,lec:r[5]?String(r[5]).trim():null});else if(!a)h=false}}
  return out}
 function downloadTemplate(){const ws=XLSX.utils.aoa_to_sheet([
@@ -19,19 +20,24 @@ function downloadTemplate(){const ws=XLSX.utils.aoa_to_sheet([
  ['Name','Code','Faculty','Department','English Level','The Lecturer'],['اسم الطالب','261541','Computer Science','Section A1','B2','كود المحاضر (اختياري)']]);
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Sheet1');XLSX.writeFile(wb,'template.xlsx')}
 async function importTab(b){
- b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p>أي طالب غير موجود يُسجَّل تلقائياً بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط (الهاتف وكلمة المرور لا تتغيران). يُنشأ الجروب إن لم يكن موجوداً.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div>`;
+ b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p>الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط. يُسجَّل الطلاب في الجروب القائم (نفس اليوم والوقت والكلاس) حتى لو أُنشئ من ملف المحاضرين، ولا يُنشأ جروب جديد إلا إذا لم يوجد.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
  $('#tp').onclick=downloadTemplate;let blocks=[];
  $('#f').onchange=async e=>{const wb=XLSX.read(await e.target.files[0].arrayBuffer());blocks=wb.SheetNames.flatMap(n=>parseRows(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null})));
   $('#pv').innerHTML=blocks.map(x=>`<div class="msg">${x.day} ${x.start}-${x.end} | ${esc(x.cls)} | ${esc(x.level)} | ${x.rows.length} طالب</div>`).join('')||'<div class="msg">لم يتم التعرف على أي جدول، استخدم القالب</div>';$('#go').disabled=!blocks.length};
- $('#go').onclick=async()=>{$('#go').disabled=true;let n=0;try{for(const x of blocks){
-   const place=x.cls+(x.building?' - '+x.building:'');
-   let [s]=await api(`slots?day=eq.${q(x.day)}&start_time=eq.${x.start}&end_time=eq.${x.end}&place=eq.${q(place)}`);
-   if(!s)[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level});
+ $('#go').onclick=async()=>{$('#go').disabled=true;const rep=[];try{
+  const isn=Object.fromEntries((await all('students?select=code,is_new')).map(s=>[s.code,s.is_new]));
+  for(const x of blocks){const place=x.cls+(x.building?' - '+x.building:'');
+   const cand=(await api(`slots?day=eq.${q(x.day)}&start_time=eq.${x.start}&end_time=eq.${x.end}&select=*`)).filter(z=>nzp(z.place)==nzp(x.cls)).sort((a,c)=>(c.lecturer_code?1:0)-(a.lecturer_code?1:0));
+   let s=cand[0],made=false;if(!s){[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level});made=true}else if(!s.level&&x.level)await api('slots?id=eq.'+s.id,'PATCH',{level:x.level});
    const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:l.code})}
-   await api('students?on_conflict=code','POST',x.rows.map(r=>({code:r.code,name:r.name,college:r.college,section:r.section,level:r.level,place:x.cls})),'resolution=merge-duplicates,return=minimal');
-   await api('enrollments?on_conflict=student_code,slot_id','POST',x.rows.map(r=>({student_code:r.code,slot_id:s.id})),'resolution=merge-duplicates,return=minimal');
-   await notify(x.rows.map(r=>r.code),'تحديث الجدول','تم تحديث جدولك: '+x.day+' '+x.start);n+=x.rows.length}
-  alert('تم استيراد '+n+' طالب');$('#pv').innerHTML=''}catch(e){alert('خطأ: '+e.message);$('#go').disabled=false}}}
+   const R=[...new Map(x.rows.map(r=>[r.code,{code:r.code,name:r.name,college:r.college,section:r.section,level:r.level,place:x.cls}])).values()],nw=R.filter(r=>!(r.code in isn)).map(r=>({...r,is_new:true})),ex=R.filter(r=>r.code in isn);
+   if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');nw.forEach(r=>isn[r.code]=true);
+   await api('enrollments?on_conflict=student_code,slot_id','POST',R.map(r=>({student_code:r.code,slot_id:s.id})),'resolution=merge-duplicates,return=minimal');
+   await notify(R.map(r=>r.code),'تحديث الجدول','تم تحديث جدولك: '+x.day+' '+x.start);
+   rep.push({x,s,made,nw:nw.length,ex:ex.length,u:R.length,real:await count('enrollments','slot_id','&slot_id=eq.'+s.id)})}
+  $('#pv').innerHTML='';$('#rp').innerHTML=`<div class="card wrap"><h3>نتيجة الاستيراد (تم التحقق من قاعدة البيانات)</h3><table class="table"><tr><th>اليوم والوقت</th><th>الكلاس</th><th>الجروب</th><th>جدد</th><th>موجودون</th><th>المسجلون فعلياً الآن</th></tr>${rep.map(r=>`<tr><td>${r.x.day} ${r.x.start}-${r.x.end}</td><td>${esc(r.x.cls)}</td><td>${r.made?'<b>جروب جديد</b>':'جروب قائم #'+r.s.id+(r.s.lecturer_code?' (محاضر '+esc(r.s.lecturer_code)+')':'')}</td><td>${r.nw}</td><td>${r.ex}</td><td class="${r.real<r.u?'bad':'ok'}">${r.real} / ${r.s.capacity||35}${r.real>(r.s.capacity||35)?' • تجاوز الحد':''}${r.real<r.u?' • نقص عن الملف':''}</td></tr>`).join('')}</table></div>`;
+  alert('تم استيراد '+rep.reduce((a,r)=>a+r.u,0)+' طالب في '+rep.length+' جروب. راجع جدول النتيجة.');$('#go').disabled=false}catch(e){alert('خطأ: '+e.message);$('#go').disabled=false}}}
+
 async function reportTab(b){
  const [sl,st,at]=await Promise.all([all('slots?order=day'),all('students?select=code,name,college,level,section,place&order=name'),all('attendance?select=student_code,present')]);
  const C=[['code','الكود'],['name','الاسم'],['college','الكلية'],['level','الليفل'],['section','السكشن'],['present','حضور'],['absent','غياب']];
@@ -42,34 +48,3 @@ async function reportTab(b){
  document.querySelectorAll('.ck').forEach(c=>c.onchange=draw);draw();
  $('#pr').onclick=()=>print();
  $('#xl').onclick=()=>{const k=draw();const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.map(r=>Object.fromEntries(k.map(c=>[c[1],r[c[0]]])))),'Report');XLSX.writeFile(wb,'report.xlsx')}}
-
-
-// منع القائمة المنسدلة عند الضغط بزر الفأرة الأيمن
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
-
-    // منع اختصارات لوحة المفاتيح الخاصة بأدوات المطور
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12") {
-            e.preventDefault();
-        }
-        // منع Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
-        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) {
-            e.preventDefault();
-        }
-        // منع Ctrl+U (عرض مصدر الصفحة)
-        if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
-            e.preventDefault();
-        }
-    });
-    setInterval(function() {
-        const startTime = performance.now();
-        debugger; // يوقف تنفيذ الكود إذا كانت أدوات المطور مفتوحة
-        const endTime = performance.now();
-        if (endTime - startTime > 100) {
-            // إذا اكتشف فتح F12، يتم توجيه المستخدم أو إعادة تحميل الصفحة
-            window.location.reload();
-        }
-    }, 1000);

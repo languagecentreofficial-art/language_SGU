@@ -11,17 +11,20 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
  ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022']],'students_template.xlsx'),
  async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place,is_new')).map(s=>[s.code,s]));
   const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
-  await api('students?on_conflict=code','POST',out,'resolution=merge-duplicates,return=minimal');return`تمت معالجة ${out.length} طالب`});
+  const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
-const lecTab=b=>upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','الأعمدة: Code, Name, Phone, Role (lecturer/assistant/admin), Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم (مثل 9-11 ليفل A1 كلاس c0012، ثم 11:30-3:30 ليفل C1 كلاس c0020).',
+const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','الأعمدة: Code, Name, Phone, Role (lecturer/assistant/admin), Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم (مثل 9-11 ليفل A1 كلاس c0012، ثم 11:30-3:30 ليفل C1 كلاس c0020).',
  ()=>dl([['Code','Name','Phone','Role','Day','From','To','Class','Level'],['L100','د. أحمد','01000000000','lecturer','Monday','9:00 AM','11:00 AM','c0012','A1'],['L100','د. أحمد','01000000000','lecturer','Monday','11:30 AM','3:30 PM','c0020','C1']],'lecturers_template.xlsx'),
- async rows=>{rows=rows.filter(r=>S(r.Code));const st={};rows.forEach(r=>st[S(r.Code)]={code:S(r.Code),name:S(r.Name)||S(r.Code),phone:S(r.Phone),role:['admin','assistant'].includes(S(r.Role))?S(r.Role):'lecturer'});
-  await api('staff?on_conflict=code','POST',Object.values(st),'resolution=merge-duplicates,return=minimal');let n=0;
+ async rows=>{rows=rows.filter(r=>S(r.Code));const st={};rows.forEach(r=>st[S(r.Code)]={name:S(r.Name),phone:S(r.Phone),role:['admin','assistant','affairs'].includes(S(r.Role))?S(r.Role):'lecturer'});
+  const have=new Set((await api('staff?select=code')).map(x=>x.code));let nu=0,up=0;
+  for(const c in st){const x=st[c];if(have.has(c)){const d={};if(x.name)d.name=x.name;if(x.phone)d.phone=x.phone;if(Object.keys(d).length)await api('staff?code=eq.'+q(c),'PATCH',d);up++}else{await api('staff','POST',{code:c,name:x.name||c,phone:x.phone,role:x.role,roles:[x.role]},'return=minimal');nu++}}
+  const nz=nzp,mk=$('#mk')?.checked;let m=0;const cr=[],sk=[];
   for(const r of rows){if(!r.Day||!r.From||!r.To)continue;const d=dayOf(r.Day),f=tm(r.From),t=tm(r.To),p=S(r.Class)||'',L=S(r.Level);
-   let[s]=await api(`slots?day=eq.${q(d)}&start_time=eq.${f}&end_time=eq.${t}&place=eq.${q(p)}`);
-   if(s)await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:S(r.Code),level:L});else await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:L,lecturer_code:S(r.Code)});n++}
-  return`تم تحديث ${Object.keys(st).length} محاضر و${n} توقيت`});
+   const cand=(await api(`slots?day=eq.${q(d)}&start_time=eq.${f}&end_time=eq.${t}&select=id,place,level`)).filter(s=>nz(s.place)==nz(p));
+   if(cand.length){for(const s of cand){const pa={lecturer_code:S(r.Code)};if(!s.level&&L)pa.level=L;await api('slots?id=eq.'+s.id,'PATCH',pa)}m+=cand.length}
+   else if(mk){await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:L,lecturer_code:S(r.Code)});cr.push(d+' '+f+' '+p)}else sk.push(d+' '+f+' '+p)}
+  return`محاضرون جدد: ${nu} — موجودون (لم تتغير صلاحياتهم): ${up}\nربط بجروبات قائمة بطلابها: ${m}\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nلم تُطابق أي جروب قائم وتم تخطيها: ${sk.length}${sk.length?'\n'+sk.join('\n'):''}`});b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: تحديث المحاضر فقط)</label>')};
 
 // ===== الدرجات =====
 async function gradesTab(b){
@@ -76,9 +79,14 @@ async function attTab(b){
   $('#sv').onclick=async()=>{await api('attendance?on_conflict=student_code,slot_id,date','POST',[...document.querySelectorAll('.stud')].map(x=>({student_code:x.dataset.c,slot_id:+id,date:d,present:x.classList.contains('p'),marked_by:me().code})),'resolution=merge-duplicates,return=minimal');alert('تم')}};
  $('#a').onchange=$('#dt').onchange=load;load()}
 
-// ===== صلاحيات المساعدين =====
+// ===== الصلاحيات: اختيار الشخص ثم منحه أي عدد من الصفات والأقسام =====
 async function permTab(b){
  if(me().role!='admin'){b.innerHTML='<div class="msg">للأدمن فقط</div>';return}
- const as=await api('staff?role=eq.assistant&select=code,name,perms');
- b.innerHTML=as.map(a=>`<div class="card"><h3>${esc(a.name)} (${a.code})</h3>${TABNAMES.filter(t=>t!='الصلاحيات'&&t!='حسابات').map(t=>`<label style="display:inline-block;margin-inline-end:14px"><input type="checkbox" data-a="${a.code}" value="${t}" ${a.perms?.[t]?'checked':''}> ${t}</label>`).join('')}<br><button class="btn" data-s="${a.code}">حفظ</button></div>`).join('')||'لا يوجد مساعدون. أنشئهم من تبويب حسابات.';
- b.querySelectorAll('[data-s]').forEach(k=>k.onclick=async()=>{const p={};b.querySelectorAll(`[data-a="${k.dataset.s}"]:checked`).forEach(c=>p[c.value]=true);await api('staff?code=eq.'+k.dataset.s,'PATCH',{perms:p});alert('تم حفظ الصلاحيات')})}
+ const as=await api('staff?select=code,name,role,roles,perms&order=name'),R=[['admin','أدمن'],['assistant','مساعد أدمن'],['affairs','شؤون الطلاب'],['lecturer','محاضر']],PRI=R.map(x=>x[0]),T=TABNAMES.filter(t=>!['الصلاحيات','حسابات'].includes(t));
+ b.innerHTML=`<div class="card"><h3>اختيار الشخص</h3><label>الحساب</label><select id="ps"><option value="">اختر الشخص...</option>${as.map(a=>`<option value="${a.code}">${esc(a.name)} (${a.code})</option>`).join('')}</select></div><div id="pb"></div>`;
+ $('#ps').onchange=()=>{const a=as.find(x=>x.code==$('#ps').value);if(!a){$('#pb').innerHTML='';return}const rs=a.roles||[a.role];
+  $('#pb').innerHTML=`<div class="card"><h3>صلاحيات ${esc(a.name)}</h3><label>الصفات — اضغط لاختيار واحدة أو أكثر</label><div id="rc">${R.map(([k,l])=>`<button type="button" class="chip ${rs.includes(k)?'on':''}" data-k="${k}">${l}</button>`).join('')}</div><label>الأقسام المسموح له برؤيتها — اختر ما تشاء</label><div id="tc">${T.map(t=>`<button type="button" class="chip ${a.perms?.[t]?'on':''}" data-k="${t}">${t}</button>`).join('')}</div><button type="button" class="btn alt" id="sa">تحديد كل الأقسام</button><button type="button" class="btn alt" id="sn">مسح الأقسام</button><button type="button" class="btn" id="sv">حفظ الصلاحيات</button></div>`;
+  $('#pb').onclick=e=>{const c=e.target.closest('.chip');if(c)c.classList.toggle('on')};
+  $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
+  $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
+   await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
