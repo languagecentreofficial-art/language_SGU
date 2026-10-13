@@ -19,10 +19,10 @@ const LA={code:['code','كود','الكود','lecturercode'],name:['name','ال�
 const lecRow=r=>{const K={};Object.keys(r).forEach(k=>K[k.toLowerCase().replace(/[\s_.\-]/g,'')]=r[k]);const o={};for(const f in LA){const k=LA[f].find(n=>K[n]!=null&&K[n]!=='');o[f]=k?K[k]:null}return o};
 const mins=t=>{const [h,m]=String(t).split(':');return +h*60+ +m};
 // مطابقة الجروب: نفس اليوم + نفس الكلاس، ثم التوقيت (مطابق تماماً أو متداخل)
-const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p));
- let hit=same.filter(s=>mins(fmt(s.start_time))==mins(f)&&mins(fmt(s.end_time))==mins(t));if(hit.length)return{hit,how:'exact'};
- hit=same.filter(s=>mins(fmt(s.start_time))<mins(t)&&mins(fmt(s.end_time))>mins(f));if(hit.length)return{hit,how:'overlap'};
- return{hit:[],why:same.length?'الكلاس موجود في هذا اليوم لكن بتوقيت مختلف ('+same.map(s=>fmt(s.start_time)+'-'+fmt(s.end_time)).join('، ')+')':'لا يوجد هذا الكلاس في هذا اليوم'}};
+const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p)),A=mins(f),B=mins(t),df=s=>[Math.abs(mins(fmt(s.start_time))-A),Math.abs(mins(fmt(s.end_time))-B)];
+ let hit=same.filter(s=>{const [x,y]=df(s);return x==0&&y==0});if(hit.length)return{hit,how:'exact'};
+ hit=same.filter(s=>{const [x,y]=df(s);return x<=15&&y<=15});if(hit.length)return{hit:[hit.sort((u,v)=>df(u)[0]+df(u)[1]-df(v)[0]-df(v)[1])[0]],how:'near'};
+ return{hit:[],why:same.length?'الكلاس له مواعيد أخرى في هذا اليوم ('+same.map(s=>fmt(s.start_time)+'-'+fmt(s.end_time)).join('، ')+')':'لا يوجد هذا الكلاس في هذا اليوم'}};
 const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','ارفع هذا الملف بعد رفع جدول الطلاب. يربط كل محاضر بالجروبات المطابقة (نفس اليوم والكلاس والوقت) دون المساس بالطلاب. الأعمدة: Code, Name, Phone, Role, Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم.',
  ()=>dl([['Code','Name','Phone','Role','Day','From','To','Class','Level'],['L100','د. أحمد','01000000000','lecturer','Monday','9:00 AM','11:00 AM','c0012','A1'],['L100','د. أحمد','01000000000','lecturer','Monday','11:30 AM','3:30 PM','c0020','C1']],'lecturers_template.xlsx'),
  async rows0=>{const rows=[...new Map(rows0.map(lecRow).filter(r=>S(r.code)).map(r=>[[S(r.code),r.day,r.from,r.to,r.cls].join('|'),r])).values()];
@@ -35,11 +35,11 @@ const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتا�
    let d,f,t;try{d=dayOf(r.day);f=tm(r.from);t=tm(r.to)}catch(e){sk.push(S(r.code)+': وقت غير مفهوم ('+r.from+' / '+r.to+')');continue}
    const p=S(r.cls)||'',c=S(r.code),m=lecMatch(sl,d,f,t,p);
    if(m.hit.length){for(const s of m.hit){await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:c});s.lecturer_code=c}if(m.how=='exact')ex+=m.hit.length;else ov+=m.hit.length;L[c]=(L[c]||0)+m.hit.length}
-   else if(mk){const [n]=await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:S(r.level),lecturer_code:c});sl.push(n);cr.push(d+' '+f+'-'+t+' '+p);L[c]=(L[c]||0)+1}
+   else if(mk){const sib=sl.find(s=>nzp(s.place)==nzp(p)),[n]=await api('slots','POST',{day:d,start_time:f,end_time:t,place:sib?sib.place:p,level:S(r.level)||sib?.level||null,lecturer_code:c});sl.push(n);cr.push(d+' '+f+'-'+t+' '+p);L[c]=(L[c]||0)+1}
    else sk.push(`${c} | ${d} ${f}-${t} | كلاس ${p} ← ${m.why}`)}
   for(const c in L)await notify([c],'تحديث جدولك','تم ربطك بـ '+L[c]+' جروب. راجع جدول محاضراتك');
-  return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت متداخل: ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
- b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: ربط المحاضر فقط)</label>')};
+  return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت مقارب (±15 دقيقة): ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
+ b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk" checked> إنشاء الموعد تلقائياً إذا لم يوجد جروب بنفس اليوم والكلاس والوقت (مثل كلاس له موعدان بمحاضرين مختلفين)</label>')};
 
 // ===== الدرجات =====
 async function gradesTab(b){
