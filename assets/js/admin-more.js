@@ -14,7 +14,7 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
   const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
-const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','الأعمدة: Code, Name, Phone, Role (lecturer/assistant/admin), Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم (مثل 9-11 ليفل A1 كلاس c0012، ثم 11:30-3:30 ليفل C1 كلاس c0020).',
+const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','يحدّث هذا الرفع حقل المحاضر فقط في الجروب المطابق (نفس اليوم والوقت والكلاس) دون المساس بالطلاب أو أي بيانات أخرى. الأعمدة: Code, Name, Phone, Role, Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم (مثل 9-11 ليفل A1 كلاس c0012، ثم 11:30-3:30 ليفل C1 كلاس c0020).',
  ()=>dl([['Code','Name','Phone','Role','Day','From','To','Class','Level'],['L100','د. أحمد','01000000000','lecturer','Monday','9:00 AM','11:00 AM','c0012','A1'],['L100','د. أحمد','01000000000','lecturer','Monday','11:30 AM','3:30 PM','c0020','C1']],'lecturers_template.xlsx'),
  async rows=>{rows=rows.filter(r=>S(r.Code));const st={};rows.forEach(r=>st[S(r.Code)]={name:S(r.Name),phone:S(r.Phone),role:['admin','assistant','affairs'].includes(S(r.Role))?S(r.Role):'lecturer'});
   const have=new Set((await api('staff?select=code')).map(x=>x.code));let nu=0,up=0;
@@ -22,7 +22,7 @@ const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتا�
   const nz=nzp,mk=$('#mk')?.checked;let m=0;const cr=[],sk=[];
   for(const r of rows){if(!r.Day||!r.From||!r.To)continue;const d=dayOf(r.Day),f=tm(r.From),t=tm(r.To),p=S(r.Class)||'',L=S(r.Level);
    const cand=(await api(`slots?day=eq.${q(d)}&start_time=eq.${f}&end_time=eq.${t}&select=id,place,level`)).filter(s=>nz(s.place)==nz(p));
-   if(cand.length){for(const s of cand){const pa={lecturer_code:S(r.Code)};if(!s.level&&L)pa.level=L;await api('slots?id=eq.'+s.id,'PATCH',pa)}m+=cand.length}
+   if(cand.length){for(const s of cand){await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:S(r.Code)})}m+=cand.length}
    else if(mk){await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:L,lecturer_code:S(r.Code)});cr.push(d+' '+f+' '+p)}else sk.push(d+' '+f+' '+p)}
   return`محاضرون جدد: ${nu} — موجودون (لم تتغير صلاحياتهم): ${up}\nربط بجروبات قائمة بطلابها: ${m}\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nلم تُطابق أي جروب قائم وتم تخطيها: ${sk.length}${sk.length?'\n'+sk.join('\n'):''}`});b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: تحديث المحاضر فقط)</label>')};
 

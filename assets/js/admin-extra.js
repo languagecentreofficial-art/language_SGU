@@ -20,16 +20,19 @@ function downloadTemplate(){const ws=XLSX.utils.aoa_to_sheet([
  ['Name','Code','Faculty','Department','English Level','The Lecturer'],['اسم الطالب','261541','Computer Science','Section A1','B2','كود المحاضر (اختياري)']]);
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Sheet1');XLSX.writeFile(wb,'template.xlsx')}
 async function importTab(b){
- b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p>الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط. يُسجَّل الطلاب في الجروب القائم (نفس اليوم والوقت والكلاس) حتى لو أُنشئ من ملف المحاضرين، ولا يُنشأ جروب جديد إلا إذا لم يوجد.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
+ b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p><b>تنبيه:</b> عند الرفع تُحذف كل جروبات الأيام الموجودة في الملف وتُنشأ من جديد بالبيانات الجديدة. الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط دون المساس بكلمة المرور.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
  $('#tp').onclick=downloadTemplate;let blocks=[];
  $('#f').onchange=async e=>{const wb=XLSX.read(await e.target.files[0].arrayBuffer());blocks=wb.SheetNames.flatMap(n=>parseRows(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null})));
   $('#pv').innerHTML=blocks.map(x=>`<div class="msg">${x.day} ${x.start}-${x.end} | ${esc(x.cls)} | ${esc(x.level)} | ${x.rows.length} طالب</div>`).join('')||'<div class="msg">لم يتم التعرف على أي جدول، استخدم القالب</div>';$('#go').disabled=!blocks.length};
- $('#go').onclick=async()=>{$('#go').disabled=true;const rep=[];try{
-  const isn=Object.fromEntries((await all('students?select=code,is_new')).map(s=>[s.code,s.is_new]));
-  for(const x of blocks){const place=x.cls+(x.building?' - '+x.building:'');
-   const cand=(await api(`slots?day=eq.${q(x.day)}&start_time=eq.${x.start}&end_time=eq.${x.end}&select=*`)).filter(z=>nzp(z.place)==nzp(x.cls)).sort((a,c)=>(c.lecturer_code?1:0)-(a.lecturer_code?1:0));
-   let s=cand[0],made=false;if(!s){[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level});made=true}else if(!s.level&&x.level)await api('slots?id=eq.'+s.id,'PATCH',{level:x.level});
-   const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:l.code})}
+ $('#go').onclick=async()=>{const days=[...new Set(blocks.map(x=>x.day))],old=[];for(const d of days)old.push(...await api(`slots?day=eq.${q(d)}&select=*`));
+  if(!confirm(`سيتم حذف كل الجروبات الموجودة في الأيام: ${days.join('، ')} (${old.length} جروب) وإعادة إنشائها من الملف.\nيُعاد ربط المحاضرين عند تطابق اليوم والوقت والكلاس، وتبقى سجلات الغياب القديمة محفوظة. متابعة؟`))return;
+  $('#go').disabled=true;const rep=[];try{
+  const lm={};old.forEach(o=>{if(o.lecturer_code)lm[[o.day,fmt(o.start_time),fmt(o.end_time),nzp(o.place)].join('|')]=o.lecturer_code});
+  for(const d of days)await api('slots?day=eq.'+q(d),'DELETE');
+  const isn=Object.fromEntries((await all('students?select=code,is_new')).map(r=>[r.code,r.is_new])),mk={};
+  for(const x of blocks){const place=x.cls+(x.building?' - '+x.building:''),key=[x.day,x.start,x.end,nzp(x.cls)].join('|');
+   let s=mk[key],made=false,lcode=lm[key]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
+   if(!s){[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level,lecturer_code:lcode});mk[key]=s;made=true}
    const R=[...new Map(x.rows.map(r=>[r.code,{code:r.code,name:r.name,college:r.college,section:r.section,level:r.level,place:x.cls}])).values()],nw=R.filter(r=>!(r.code in isn)).map(r=>({...r,is_new:true})),ex=R.filter(r=>r.code in isn);
    if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');nw.forEach(r=>isn[r.code]=true);
    await api('enrollments?on_conflict=student_code,slot_id','POST',R.map(r=>({student_code:r.code,slot_id:s.id})),'resolution=merge-duplicates,return=minimal');
