@@ -1,8 +1,9 @@
 const dl=(a,n)=>{const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet(a),'Sheet1');XLSX.writeFile(w,n)};
-const rd=async f=>{const w=XLSX.read(await f.arrayBuffer());return XLSX.utils.sheet_to_json(w.Sheets[w.SheetNames[0]],{defval:null})};
+const rd=async f=>{const w=XLSX.read(await f.arrayBuffer());return w.SheetNames.flatMap(n=>XLSX.utils.sheet_to_json(w.Sheets[n],{defval:null}))};
 const S=v=>v==null?null:String(v).trim()||null;
-const tm=v=>typeof v=='number'?String(Math.floor(v*24)).padStart(2,'0')+':'+String(Math.round(v*1440)%60).padStart(2,'0'):t24(String(v));
-const dayOf=v=>EN2AR[String(v).trim().toLowerCase()]||String(v).trim();
+const tm=v=>{if(v instanceof Date)return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');if(typeof v=='number'){let m=Math.round((v-Math.floor(v))*1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}return t24(String(v))};
+const nA=x=>String(x).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim();
+const dayOf=v=>{const s=String(v).trim().toLowerCase(),k=s.length>=3&&Object.keys(EN2AR).find(k=>k.startsWith(s.slice(0,3)));if(k)return EN2AR[k];return DAYS.find(d=>nA(d)==nA(s))||String(v).trim()};
 const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');try{alert(await run(await rd(f)))}catch(e){alert('خطأ: '+e.message)}}};
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
@@ -14,17 +15,31 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
   const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
-const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','يحدّث هذا الرفع حقل المحاضر فقط في الجروب المطابق (نفس اليوم والوقت والكلاس) دون المساس بالطلاب أو أي بيانات أخرى. الأعمدة: Code, Name, Phone, Role, Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم (مثل 9-11 ليفل A1 كلاس c0012، ثم 11:30-3:30 ليفل C1 كلاس c0020).',
+const LA={code:['code','كود','الكود','lecturercode'],name:['name','الاسم','اسم'],phone:['phone','mobile','tel','الهاتف','رقمالهاتف'],role:['role','الصلاحية'],day:['day','اليوم'],from:['from','start','starttime','من'],to:['to','end','endtime','الى','إلى'],cls:['class','classroom','room','place','كلاس','الكلاس'],level:['level','englishlevel','الليفل']};
+const lecRow=r=>{const K={};Object.keys(r).forEach(k=>K[k.toLowerCase().replace(/[\s_.\-]/g,'')]=r[k]);const o={};for(const f in LA){const k=LA[f].find(n=>K[n]!=null&&K[n]!=='');o[f]=k?K[k]:null}return o};
+const mins=t=>{const [h,m]=String(t).split(':');return +h*60+ +m};
+// مطابقة الجروب: نفس اليوم + نفس الكلاس، ثم التوقيت (مطابق تماماً أو متداخل)
+const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p));
+ let hit=same.filter(s=>mins(fmt(s.start_time))==mins(f)&&mins(fmt(s.end_time))==mins(t));if(hit.length)return{hit,how:'exact'};
+ hit=same.filter(s=>mins(fmt(s.start_time))<mins(t)&&mins(fmt(s.end_time))>mins(f));if(hit.length)return{hit,how:'overlap'};
+ return{hit:[],why:same.length?'الكلاس موجود في هذا اليوم لكن بتوقيت مختلف ('+same.map(s=>fmt(s.start_time)+'-'+fmt(s.end_time)).join('، ')+')':'لا يوجد هذا الكلاس في هذا اليوم'}};
+const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتاتهم','ارفع هذا الملف بعد رفع جدول الطلاب. يربط كل محاضر بالجروبات المطابقة (نفس اليوم والكلاس والوقت) دون المساس بالطلاب. الأعمدة: Code, Name, Phone, Role, Day, From, To, Class, Level. كرّر المحاضر في أكثر من صف لتحديد أكثر من توقيت في اليوم.',
  ()=>dl([['Code','Name','Phone','Role','Day','From','To','Class','Level'],['L100','د. أحمد','01000000000','lecturer','Monday','9:00 AM','11:00 AM','c0012','A1'],['L100','د. أحمد','01000000000','lecturer','Monday','11:30 AM','3:30 PM','c0020','C1']],'lecturers_template.xlsx'),
- async rows=>{rows=rows.filter(r=>S(r.Code));const st={};rows.forEach(r=>st[S(r.Code)]={name:S(r.Name),phone:S(r.Phone),role:['admin','assistant','affairs'].includes(S(r.Role))?S(r.Role):'lecturer'});
-  const have=new Set((await api('staff?select=code')).map(x=>x.code));let nu=0,up=0;
+ async rows0=>{const rows=[...new Map(rows0.map(lecRow).filter(r=>S(r.code)).map(r=>[[S(r.code),r.day,r.from,r.to,r.cls].join('|'),r])).values()];
+  if(!rows.length)throw new Error('لم يتم التعرف على الأعمدة. المطلوب: Code, Name, Phone, Role, Day, From, To, Class, Level');
+  const st={};rows.forEach(r=>{const c=S(r.code),ro=(S(r.role)||'').toLowerCase();st[c]=st[c]||{name:S(r.name),phone:S(r.phone),role:['admin','assistant','affairs'].includes(ro)?ro:'lecturer'}});
+  const have=new Set((await all('staff?select=code')).map(x=>x.code));let nu=0,up=0;
   for(const c in st){const x=st[c];if(have.has(c)){const d={};if(x.name)d.name=x.name;if(x.phone)d.phone=x.phone;if(Object.keys(d).length)await api('staff?code=eq.'+q(c),'PATCH',d);up++}else{await api('staff','POST',{code:c,name:x.name||c,phone:x.phone,role:x.role,roles:[x.role]},'return=minimal');nu++}}
-  const nz=nzp,mk=$('#mk')?.checked;let m=0;const cr=[],sk=[];
-  for(const r of rows){if(!r.Day||!r.From||!r.To)continue;const d=dayOf(r.Day),f=tm(r.From),t=tm(r.To),p=S(r.Class)||'',L=S(r.Level);
-   const cand=(await api(`slots?day=eq.${q(d)}&start_time=eq.${f}&end_time=eq.${t}&select=id,place,level`)).filter(s=>nz(s.place)==nz(p));
-   if(cand.length){for(const s of cand){await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:S(r.Code)})}m+=cand.length}
-   else if(mk){await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:L,lecturer_code:S(r.Code)});cr.push(d+' '+f+' '+p)}else sk.push(d+' '+f+' '+p)}
-  return`محاضرون جدد: ${nu} — موجودون (لم تتغير صلاحياتهم): ${up}\nربط بجروبات قائمة بطلابها: ${m}\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nلم تُطابق أي جروب قائم وتم تخطيها: ${sk.length}${sk.length?'\n'+sk.join('\n'):''}`});b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: تحديث المحاضر فقط)</label>')};
+  const sl=await all('slots?select=id,day,start_time,end_time,place,level,lecturer_code&order=id'),mk=$('#mk')?.checked,L={};let ex=0,ov=0,noT=0;const cr=[],sk=[];
+  for(const r of rows){if(!r.day||!r.from||!r.to){noT++;continue}
+   let d,f,t;try{d=dayOf(r.day);f=tm(r.from);t=tm(r.to)}catch(e){sk.push(S(r.code)+': وقت غير مفهوم ('+r.from+' / '+r.to+')');continue}
+   const p=S(r.cls)||'',c=S(r.code),m=lecMatch(sl,d,f,t,p);
+   if(m.hit.length){for(const s of m.hit){await api('slots?id=eq.'+s.id,'PATCH',{lecturer_code:c});s.lecturer_code=c}if(m.how=='exact')ex+=m.hit.length;else ov+=m.hit.length;L[c]=(L[c]||0)+m.hit.length}
+   else if(mk){const [n]=await api('slots','POST',{day:d,start_time:f,end_time:t,place:p,level:S(r.level),lecturer_code:c});sl.push(n);cr.push(d+' '+f+'-'+t+' '+p);L[c]=(L[c]||0)+1}
+   else sk.push(`${c} | ${d} ${f}-${t} | كلاس ${p} ← ${m.why}`)}
+  for(const c in L)await notify([c],'تحديث جدولك','تم ربطك بـ '+L[c]+' جروب. راجع جدول محاضراتك');
+  return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت متداخل: ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
+ b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: ربط المحاضر فقط)</label>')};
 
 // ===== الدرجات =====
 async function gradesTab(b){

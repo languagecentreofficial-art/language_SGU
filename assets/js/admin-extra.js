@@ -1,6 +1,6 @@
 const EN2AR={sunday:'الأحد',monday:'الاثنين',tuesday:'الثلاثاء',wednesday:'الأربعاء',thursday:'الخميس',friday:'الجمعة',saturday:'السبت'};
 const q=s=>encodeURIComponent(s);
-const nzp=s=>String(s||'').toLowerCase().replace(/^class\s*/,'').replace(/^c(?=\d)/,'').split('-')[0].trim();
+const nzp=s=>{let x=String(s??'').toLowerCase().split(/\s+-\s+/)[0];x=x.replace(/class|كلاس/g,'').replace(/[^a-z0-9\u0600-\u06ff]/g,'').replace(/^c(?=\d)/,'');return x.replace(/^0+(?=.)/,'')};
 function t24(s){const m=s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);let h=+m[1];const a=(m[3]||'').toUpperCase();if(a=='PM'&&h<12)h+=12;if(a=='AM'&&h==12)h=0;if(!a&&h<7)h+=12;return String(h).padStart(2,'0')+':'+m[2]}
 async function all(path){let o=[],i=0,r;do{r=await api(path+(path.includes('?')?'&':'?')+'limit=1000&offset='+i);o=o.concat(r);i+=1000}while(r.length==1000);return o}
 // قراءة الشيت: يدعم أكثر من بلوك (يوم/وقت/مبنى/كلاس/جدول طلاب) في نفس الملف
@@ -27,11 +27,11 @@ async function importTab(b){
  $('#go').onclick=async()=>{const days=[...new Set(blocks.map(x=>x.day))],old=[];for(const d of days)old.push(...await api(`slots?day=eq.${q(d)}&select=*`));
   if(!confirm(`سيتم حذف كل الجروبات الموجودة في الأيام: ${days.join('، ')} (${old.length} جروب) وإعادة إنشائها من الملف.\nيُعاد ربط المحاضرين عند تطابق اليوم والوقت والكلاس، وتبقى سجلات الغياب القديمة محفوظة. متابعة؟`))return;
   $('#go').disabled=true;const rep=[];try{
-  const lm={};old.forEach(o=>{if(o.lecturer_code)lm[[o.day,fmt(o.start_time),fmt(o.end_time),nzp(o.place)].join('|')]=o.lecturer_code});
+  const lm={},lm2={};old.forEach(o=>{if(!o.lecturer_code)return;lm[[o.day,fmt(o.start_time),fmt(o.end_time),nzp(o.place)].join('|')]=o.lecturer_code;const k2=o.day+'|'+nzp(o.place);lm2[k2]=(k2 in lm2&&lm2[k2]!==o.lecturer_code)?null:o.lecturer_code});
   for(const d of days)await api('slots?day=eq.'+q(d),'DELETE');
   const isn=Object.fromEntries((await all('students?select=code,is_new')).map(r=>[r.code,r.is_new])),mk={};
   for(const x of blocks){const place=x.cls+(x.building?' - '+x.building:''),key=[x.day,x.start,x.end,nzp(x.cls)].join('|');
-   let s=mk[key],made=false,lcode=lm[key]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
+   let s=mk[key],made=false,lcode=lm[key]||lm2[x.day+'|'+nzp(x.cls)]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
    if(!s){[s]=await api('slots','POST',{day:x.day,start_time:x.start,end_time:x.end,place,level:x.level,lecturer_code:lcode});mk[key]=s;made=true}
    const R=[...new Map(x.rows.map(r=>[r.code,{code:r.code,name:r.name,college:r.college,section:r.section,level:r.level,place:x.cls}])).values()],nw=R.filter(r=>!(r.code in isn)).map(r=>({...r,is_new:true})),ex=R.filter(r=>r.code in isn);
    if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');nw.forEach(r=>isn[r.code]=true);
