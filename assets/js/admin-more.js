@@ -182,3 +182,4 @@ async function permTab(b){
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
+
