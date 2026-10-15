@@ -1,5 +1,5 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light only"><meta name="theme-color" content="#17306b"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/style.css"><title>المحاضر</title></head><body><main><div id="v"></div></main>
-<script src="assets/js/app.js?v=27"></script><script>
+<script src="assets/js/app.js?v=28"></script><script>
 const u=guard(['lecturer','admin','assistant']);shell(u);
 tabs([
 ['تسجيل الغياب',async b=>{const today=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
@@ -15,7 +15,7 @@ tabs([
 ['جدول محاضراتي',async b=>{const s=await api(`slots?lecturer_code=eq.${u.code}&order=start_time`);if(!s.length){b.innerHTML='<div class="msg">لا توجد جروبات مسندة إليك حتى الآن.</div>';return}
  const cap=g=>g.capacity||35,lb=g=>`${g.day} ${fmt(g.start_time)}-${fmt(g.end_time)} | كلاس ${esc(g.place)} | ${esc(g.level)}`,en=await api(`enrollments?slot_id=in.(${s.map(x=>x.id).join(',')})&select=slot_id`),N={};en.forEach(e=>N[e.slot_id]=(N[e.slot_id]||0)+1);
  const cnt=g=>`<span id="n${g.id}" ${(N[g.id]||0)>cap(g)?'class="bad"':''}>${N[g.id]||0}/${cap(g)} طالب</span>`;
- b.innerHTML=DAYS.filter(d=>s.some(x=>x.day==d)).map(d=>`<div class="dayh">${d}</div>`+s.filter(x=>x.day==d).map(x=>`<div class="srow" data-id="${x.id}"><b>كلاس ${esc(x.place)}</b><span>${fmt(x.start_time)} – ${fmt(x.end_time)}</span><span class="pill">الليفل ${esc(x.level)}</span>${cnt(x)}</div><div class="sbody" id="sb${x.id}" hidden></div>`).join('')).join('');
+ b.innerHTML=DAYS.filter(d=>s.some(x=>x.day==d)).map(d=>`<div class="dayh">${d}</div>`+s.filter(x=>x.day==d).map(x=>`<div class="srow" data-id="${x.id}"><b>كلاس ${esc(x.place)}</b><span><bdi dir="ltr">${fmt(x.start_time)} – ${fmt(x.end_time)}</bdi></span><span class="pill">الليفل ${esc(x.level)}</span>${cnt(x)}</div><div class="sbody" id="sb${x.id}" hidden></div>`).join('')).join('');
  const open=async id=>{const g=s.find(x=>x.id==id),a=await api(`enrollments?slot_id=eq.${id}&select=student:students(code,name,section)`),others=s.filter(x=>x.id!=id);N[id]=a.length;$('#n'+id).outerHTML=cnt(g);
   $('#sb'+id).innerHTML=`<div class="wrap"><table class="table"><tr><th>الاسم</th><th>الكود</th><th>السكشن</th><th>نقل إلى (جروباتك فقط)</th></tr>${a.map(({student:t})=>`<tr><td>${esc(t.name)}</td><td>${t.code}</td><td>${esc(t.section)}</td><td>${others.length?`<select data-m="${t.code}" data-s="${id}"><option value="">اختر جروباً...</option>${others.map(o=>`<option value="${o.id}">${lb(o)} (${N[o.id]||0}/${cap(o)})</option>`).join('')}</select>`:'—'}</td></tr>`).join('')||'<tr><td colspan="4">لا يوجد طلاب</td></tr>'}</table></div>`};
  b.querySelectorAll('.srow').forEach(r=>r.onclick=async()=>{const x=$('#sb'+r.dataset.id);x.hidden=!x.hidden;if(!x.hidden)await open(r.dataset.id)});
