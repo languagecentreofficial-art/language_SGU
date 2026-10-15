@@ -244,3 +244,34 @@ async function newSlotTab(b){
  $('#sv').onclick=()=>run([{day:$('#d').value,start:$('#f').value,end:$('#t').value,place:S($('#p').value),level:S($('#l').value),lec:$('#lc').value||null,cap:+$('#cp').value||null,students:codes($('#cs').value)}]).catch(e=>alert(e.message));
  $('#tp').onclick=()=>dl([['Day','From','To','Class','Level','Lecturer','Capacity','Students'],['Monday','9:00 AM','11:00 AM','0022','A1','L100','35','261541 261571'],['Tuesday','11:30 AM','3:30 PM','H028','B2','','','']],'groups_template.xlsx');
  $('#up').onclick=async()=>{const f=$('#fx').files[0];if(!f)return alert('اختر ملفاً');try{const rows=await rd(f);await run(rows.filter(r=>r.Day||r.Class).map(r=>({day:r.Day?dayOf(r.Day):null,start:T(r.From),end:T(r.To),place:S(r.Class),level:S(r.Level),lec:S(r.Lecturer),cap:+r.Capacity||null,students:codes(r.Students)})))}catch(e){alert('خطأ: '+e.message)}}}
+
+// ===== الطلاب المسجلون في أكثر من كلاس =====
+async function multiTab(b){
+ b.innerHTML='<div class="msg">جارٍ التحميل...</div>';
+ const [sl,en]=await Promise.all([all('slots?select=id,day,start_time,end_time,place,level,capacity&order=day,start_time'),all('enrollments?select=slot_id,student_code&order=student_code')]);
+ const lv=x=>String(x||'').trim().toUpperCase(),S=Object.fromEntries(sl.map(x=>[x.id,x])),G={},N={};en.forEach(e=>{N[e.slot_id]=(N[e.slot_id]||0)+1;(G[e.student_code]=G[e.student_code]||[]).push(e.slot_id)});
+ const codes=Object.keys(G).filter(c=>G[c].length>1),ST={};
+ for(let i=0;i<codes.length;i+=150)(await api(`students?select=code,name,level&code=in.${encodeURIComponent('('+codes.slice(i,i+150).map(c=>'"'+c+'"').join(',')+')')}`)).forEach(r=>ST[r.code]=r);
+ const sug=c=>{const m=G[c].filter(id=>lv(S[id]?.level)==lv(ST[c]?.level)&&lv(ST[c]?.level));return m.length?m.sort((a,b)=>(N[a]||0)-(N[b]||0))[0]:null};
+ let rows=codes.map(c=>({c,keep:sug(c)})),shown=100;
+ const lb=s=>s?`${s.day} ${fmt(s.start_time)}-${fmt(s.end_time)} | كلاس ${esc(s.place)} | ${esc(s.level)}`:'(جروب محذوف)';
+ const draw=()=>{b.innerHTML=`<div class="card"><h3>الطلاب المسجلون في أكثر من كلاس: <b class="${rows.length?'bad':'ok'}">${rows.length}</b></h3><p class="note">الاقتراح التلقائي: إبقاء الجروب الذي ليفله يطابق ليفل الطالب (والأقل ازدحاماً إن تعدد). من لا يوجد له جروب مطابق يُترك للاختيار اليدوي.</p>${rows.length?`<button class="btn" id="au">تطبيق الاقتراح التلقائي (${rows.filter(r=>r.keep).length} طالب)</button>`:''}</div>`+(rows.length?`<div class="card wrap"><table class="table"><tr><th>الطالب</th><th>ليفله</th><th>اختر الجروب الذي يبقى فيه</th><th></th></tr>${rows.slice(0,shown).map(r=>`<tr><td>${esc(ST[r.c]?.name)}<br><small>${r.c}</small></td><td>${esc(ST[r.c]?.level)}</td><td>${G[r.c].map(id=>`<label style="display:block;margin:2px 0"><input type="radio" name="k${r.c}" value="${id}" ${r.keep==id?'checked':''}> ${lb(S[id])}${lv(S[id]?.level)==lv(ST[r.c]?.level)?'':' <span class="bad">(ليفل مختلف)</span>'}</label>`).join('')}</td><td><button type="button" class="chip" data-sv="${r.c}">حفظ</button></td></tr>`).join('')}</table>${shown<rows.length?`<button class="btn alt" id="mo">عرض المزيد (${rows.length-shown})</button>`:''}</div>`:'<div class="msg">لا يوجد طلاب مسجلون في أكثر من جروب.</div>');
+  if($('#mo'))$('#mo').onclick=()=>{shown+=100;draw()};
+  if($('#au'))$('#au').onclick=async()=>{const P=rows.filter(r=>r.keep);if(!P.length||!confirm('إبقاء كل طالب في جروبه المطابق لليفله وحذفه من باقي جروباته ('+P.length+' طالب)؟'))return;try{for(const r of P)await fix(r.c,r.keep);rows=rows.filter(r=>!r.keep);draw();alert('تم تصحيح '+P.length+' طالب')}catch(e){alert(e.message)}};
+  b.querySelectorAll('[data-sv]').forEach(k=>k.onclick=async()=>{const c=k.dataset.sv,v=document.querySelector(`input[name="k${c}"]:checked`);if(!v)return alert('اختر الجروب الذي يبقى فيه الطالب');try{await fix(c,+v.value);rows=rows.filter(r=>r.c!=c);draw()}catch(e){alert(e.message)}})};
+ const fix=async(c,keep)=>{const rm=G[c].filter(id=>id!=keep);await api(`enrollments?student_code=eq.${encodeURIComponent(c)}&slot_id=in.(${rm.join(',')})`,'DELETE');rm.forEach(id=>N[id]--);G[c]=[keep];await notify([c],'تم تعديل جدولك','تم إبقاؤك في جروب واحد: '+S[keep].day+' كلاس '+S[keep].place)};
+ draw()}
+
+// ===== إضافة طالب (مع تسكين في جروب بنفس الليفل) =====
+async function newStudentTab(b){
+ const [sl,en,F]=await Promise.all([all('slots?select=*&order=day,start_time'),all('enrollments?select=slot_id'),all('students?select=college,level')]);
+ const lv=x=>String(x||'').trim().toUpperCase(),N={},adm=me().role=='admin',U=k=>[...new Set(F.map(s=>s[k]).filter(Boolean))].sort();en.forEach(e=>N[e.slot_id]=(N[e.slot_id]||0)+1);
+ b.innerHTML=`<div class="card"><h3>إضافة طالب</h3><label>الكود</label><input id="code"><label>الاسم</label><input id="name"><label>الهاتف</label><input id="phone"><label>الكلية</label><input id="college" list="dlc"><datalist id="dlc">${U('college').map(v=>`<option value="${esc(v)}">`).join('')}</datalist><label>المستوى (الليفل)</label><input id="level" list="dll" placeholder="مثال: A1"><datalist id="dll">${[...new Set([...U('level'),...sl.map(s=>s.level).filter(Boolean)])].sort().map(v=>`<option value="${esc(v)}">`).join('')}</datalist><label>السكشن</label><input id="section"><label>الجروب / الكلاس (يظهر حسب الليفل المكتوب)</label><select id="grp"></select><button class="btn" id="sv">حفظ الطالب</button></div>`;
+ const fill=()=>{const L=lv($('#level').value),c=sl.filter(s=>L&&lv(s.level)==L);$('#grp').innerHTML=!L?'<option value="">اكتب الليفل أولاً</option>':'<option value="">بدون تسكين الآن</option>'+c.map(s=>{const n=N[s.id]||0,f=n>=capOf(s);return`<option value="${s.id}" ${f&&!adm?'disabled':''}>${slotLb(s)} (${n}/${capOf(s)})${f?' • ممتلئ':''}</option>`}).join('')+(c.length?'':'<option value="" disabled>لا توجد جروبات بهذا الليفل</option>')};
+ fill();$('#level').oninput=fill;$('#level').onchange=fill;
+ $('#sv').onclick=async()=>{const v=i=>$('#'+i).value.trim()||null,code=v('code'),name=v('name'),g=sl.find(x=>x.id==$('#grp').value);if(!code||!name)return alert('الكود والاسم مطلوبان');if(g&&!v('level'))return alert('اكتب الليفل أولاً');
+  try{if((await api('students?code=eq.'+encodeURIComponent(code)+'&select=code')).length)return alert('هذا الكود موجود مسبقاً. استخدم تبويب "بيانات الطلاب" لتعديله.');
+   if(g&&(N[g.id]||0)>=capOf(g)&&!confirm('الكلاس ممتلئ. المتابعة بتجاوز الحد؟'))return;
+   await api('students','POST',{code,name,phone:v('phone'),college:v('college'),level:v('level'),section:v('section'),place:g?String(g.place).split(' - ')[0].trim():null,is_new:!g},'return=minimal');
+   if(g){await api('enrollments','POST',{student_code:code,slot_id:g.id},'return=minimal');N[g.id]=(N[g.id]||0)+1}
+   alert('تمت الإضافة'+(g?' وتسكينه في: '+g.day+' '+fmt(g.start_time)+'-'+fmt(g.end_time)+' كلاس '+g.place:'')+'. كلمة المرور = الكود.');['code','name','phone','section'].forEach(i=>$('#'+i).value='');fill()}catch(e){alert('تعذر الحفظ: '+e.message)}}}
