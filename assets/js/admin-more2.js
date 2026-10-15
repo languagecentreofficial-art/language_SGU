@@ -3,6 +3,7 @@ const slotLb=s=>`${s.day} ${fmt(s.start_time)}-${fmt(s.end_time)} | ${esc(s.plac
 const chk=(n,c)=>`<label style="display:inline-block;margin-inline-end:14px"><input type="checkbox" class="${c}" value="${n}" checked> ${n}</label>`;
 // ===== معاينة الجداول (تحميل عند الطلب حسب الفلاتر) =====
 async function schedTab(b){
+ if(!document.getElementById('sp-css'))document.head.insertAdjacentHTML('beforeend','<style id="sp-css">.perh2{display:flex;align-items:center;gap:8px;font-weight:700;color:#12307a;margin:16px 4px 8px;font-size:.92rem}.perh2 i{width:10px;height:10px;border-radius:50%;display:inline-block}.perh2 small{color:#5d6b8f;font-weight:600}.tm{padding:3px 10px;border-radius:8px;font-weight:700;color:#0a1a44}</style>');
  const [sl,lec,EN]=await Promise.all([all('slots?select=*,lec:staff(name)&order=start_time'),api('staff?role=eq.lecturer&select=code,name'),all('enrollments?select=slot_id')]);const N={};EN.forEach(e=>N[e.slot_id]=(N[e.slot_id]||0)+1);const pill=s=>{const n=N[s.id]||0,o=n>capOf(s);return`<span class="pill" id="pc${s.id}" ${o?'style="background:#fde2e6;color:#b3263f"':''}>${n}/${capOf(s)}${o?' • تجاوز الحد':''}</span>`};
  let MM=null;const lv=x=>String(x||'').trim().toUpperCase(),bad=(t,g)=>lv(t.level)&&lv(g.level)&&lv(t.level)!=lv(g.level),adm=me().role=='admin',sel=new Set(),opts=sl.map(s=>`<option value="${s.id}">${slotLb(s)}</option>`).join('');
  const sugg=(t,g)=>{const c=sl.filter(x=>x.id!=g.id&&lv(x.level)==lv(t.level)),same=c.filter(x=>x.day==g.day&&fmt(x.start_time)==fmt(g.start_time)),rest=c.filter(x=>!same.includes(x)),o=a=>a.map(x=>`<option value="${x.id}">${slotLb(x)} (${N[x.id]||0}/${capOf(x)})</option>`).join('');return c.length?(same.length?`<optgroup label="نفس اليوم والوقت">${o(same)}</optgroup>`:'')+(rest.length?`<optgroup label="أوقات أخرى">${o(rest)}</optgroup>`:''):'<option value="" disabled>لا يوجد جروب بهذا الليفل</option>'};
@@ -10,11 +11,15 @@ async function schedTab(b){
  document.querySelectorAll('#dc .chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');c.classList.contains('on')?sel.add(c.dataset.d):sel.delete(c.dataset.d)});
  const open=async id=>{const s=sl.find(x=>x.id==id),box=$('#sb'+id),A=await api(`enrollments?slot_id=eq.${id}&select=student:students(code,name,college,level,section)`);
   N[id]=A.length;$('#pc'+id).outerHTML=pill(s);box.innerHTML=`<div class="grid2"><div><label>المحاضر</label><select data-l="${id}"><option value="">بدون</option>${lec.map(x=>`<option value="${x.code}" ${x.code==s.lecturer_code?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>${adm?`<div><label>الحد الأقصى للطلاب</label><input type="number" min="1" data-c="${id}" value="${capOf(s)}"></div>`:''}<div><label>عدد الطلاب</label><b ${A.length>=capOf(s)?'class="bad"':''}>${A.length} / ${capOf(s)}</b></div></div><div class="grid2"><div><label>نقل كل طلاب هذا الجروب إلى</label><select id="bt${id}"><option value="">اختر جروباً...</option>${opts}</select></div><div><button type="button" class="btn alt" data-bulk="${id}">نقل الكل</button></div></div><div class="wrap"><table class="table"><tr><th>الاسم</th><th>الكود</th><th>الكلية</th><th>السكشن</th><th>الليفل</th><th></th><th>نقل إلى</th></tr>${A.filter(({student:t})=>$('#fm').value!='1'||bad(t,s)).map(({student:t})=>`<tr><td>${esc(t.name)}</td><td>${t.code}</td><td>${esc(t.college)}</td><td>${esc(t.section)}</td><td ${bad(t,s)?'class="bad"':''}>${esc(t.level)}${bad(t,s)?' (مخالف)':''}</td><td><button type="button" class="chip" data-ed="${t.code}" data-sl="${id}">تعديل</button></td><td><select data-m="${t.code}" data-s="${id}">${bad(t,s)?'<option value="">الجروبات المناسبة لليفله...</option>'+sugg(t,s):'<option value="">اختر جروباً...</option>'+opts}</select></td></tr>`).join('')||'<tr><td colspan="7">لا يوجد طلاب</td></tr>'}</table></div>`};
+ const PC=['#3b82f6','#14b8a6','#8b5cf6','#ec4899','#f97316','#22c55e','#06b6d4','#eab308'];
+ const dayHtml=(d,L)=>{const A=L.filter(s=>s.day==d).sort((x,y)=>fmt(x.start_time).localeCompare(fmt(y.start_time))||fmt(x.end_time).localeCompare(fmt(y.end_time))||String(x.place).localeCompare(String(y.place),undefined,{numeric:true})),P=[];
+  A.forEach(s=>{const k=fmt(s.start_time)+' – '+fmt(s.end_time);let g=P.find(x=>x.k==k);if(!g)P.push(g={k,a:[]});g.a.push(s)});
+  return`<div class="dayh" id="day-${DAYS.indexOf(d)}">${d}<small> — ${A.length} سكشن</small></div>`+P.map((g,i)=>{const c=PC[i%PC.length];return`<div class="perh2"><i style="background:${c}"></i>الفترة <bdi dir="ltr">${g.k}</bdi><small>${g.a.length} سكشن</small></div>`+g.a.map(s=>`<div class="srow" data-id="${s.id}" style="border-inline-start:6px solid ${c};background:${c}10"><b>كلاس ${esc(s.place)}</b><span class="tm" style="background:${c}26"><bdi dir="ltr">${fmt(s.start_time)} – ${fmt(s.end_time)}</bdi></span><span class="pill">${esc(s.level)}</span>${pill(s)}${MM&&MM[s.id]?`<span class="pill" style="background:#fde2e6;color:#b3263f">${MM[s.id]} بليفل مخالف</span>`:''}<span>${esc(s.lec?.name||'بدون محاضر')}</span></div><div class="sbody" id="sb${s.id}" hidden></div>`).join('')}).join('')};
  $('#go').onclick=async()=>{if($('#fm').value=='1'){const SM=Object.fromEntries(sl.map(x=>[x.id,x])),E=await all('enrollments?select=slot_id,student:students(level)&order=slot_id,student_code');MM={};E.forEach(e=>{const g=SM[e.slot_id];if(g&&e.student&&bad(e.student,g))MM[g.id]=(MM[g.id]||0)+1})}else MM=null;const t=$('#q').value.trim().toLowerCase(),lc=$('#lc').value,days=sel.size?DAYS.filter(d=>sel.has(d)):DAYS,by=new Set();
   if(t){const e=encodeURIComponent(t),r=await api(`students?or=(name.ilike.*${e}*,code.eq.${e})&select=code&limit=30`);if(r.length)(await api(`enrollments?student_code=in.(${r.map(x=>x.code).join(',')})&select=slot_id`)).forEach(x=>by.add(x.slot_id))}
   const L=sl.filter(s=>days.includes(s.day)&&(!lc||s.lecturer_code==lc)&&(v=>!v||(v=='1'&&(N[s.id]||0)>0)||(v=='0'&&!(N[s.id]||0))||(v=='2'&&(N[s.id]||0)>capOf(s))||(v=='3'&&(N[s.id]||0)>=capOf(s)))($('#fs').value)&&(!MM||MM[s.id])&&(!t||by.has(s.id)||[s.place,s.level,s.lec?.name].join(' ').toLowerCase().includes(t))),D=days.filter(d=>L.some(s=>s.day==d));
   $('#nv').innerHTML=D.length>1?`<div class="card"><h3>انتقال سريع</h3>${D.map(d=>`<a class="chip" href="#day-${DAYS.indexOf(d)}">${d}</a>`).join('')}</div>`:'';
-  $('#g').innerHTML=D.map(d=>`<div class="dayh" id="day-${DAYS.indexOf(d)}">${d}<small> — ${L.filter(s=>s.day==d).length} سكشن</small></div>`+L.filter(s=>s.day==d).map(s=>`<div class="srow" data-id="${s.id}"><b>كلاس ${esc(s.place)}</b><span>${fmt(s.start_time)} – ${fmt(s.end_time)}</span><span class="pill">${esc(s.level)}</span>${pill(s)}${MM&&MM[s.id]?`<span class="pill" style="background:#fde2e6;color:#b3263f">${MM[s.id]} بليفل مخالف</span>`:''}<span>${esc(s.lec?.name||'بدون محاضر')}</span></div><div class="sbody" id="sb${s.id}" hidden></div>`).join('')).join('')||'<div class="msg">لا توجد جداول مطابقة</div>';
+  $('#g').innerHTML=D.map(d=>dayHtml(d,L)).join('')||'<div class="msg">لا توجد جداول مطابقة</div>';
   document.querySelectorAll('.srow').forEach(r=>r.onclick=async()=>{const x=$('#sb'+r.dataset.id);x.hidden=!x.hidden;if(!x.hidden)await open(r.dataset.id)})};
  if($('#dup'))$('#dup').onclick=async()=>{if(!confirm('سيتم دمج الجروبات المتطابقة (نفس اليوم والوقت والكلاس) في جروب واحد بطلابه ومحاضره. متابعة؟'))return;try{const n=await mergeDup();alert(n?'تم دمج '+n+' جروب مكرر':'لا توجد جروبات مكررة');schedTab(b)}catch(e){alert(e.message)}};
  $('#g').addEventListener('click',e=>{const k=e.target.closest('[data-ed]');if(k)studentEditor(k.dataset.ed,()=>open(k.dataset.sl))});
@@ -239,62 +244,3 @@ async function newSlotTab(b){
  $('#sv').onclick=()=>run([{day:$('#d').value,start:$('#f').value,end:$('#t').value,place:S($('#p').value),level:S($('#l').value),lec:$('#lc').value||null,cap:+$('#cp').value||null,students:codes($('#cs').value)}]).catch(e=>alert(e.message));
  $('#tp').onclick=()=>dl([['Day','From','To','Class','Level','Lecturer','Capacity','Students'],['Monday','9:00 AM','11:00 AM','0022','A1','L100','35','261541 261571'],['Tuesday','11:30 AM','3:30 PM','H028','B2','','','']],'groups_template.xlsx');
  $('#up').onclick=async()=>{const f=$('#fx').files[0];if(!f)return alert('اختر ملفاً');try{const rows=await rd(f);await run(rows.filter(r=>r.Day||r.Class).map(r=>({day:r.Day?dayOf(r.Day):null,start:T(r.From),end:T(r.To),place:S(r.Class),level:S(r.Level),lec:S(r.Lecturer),cap:+r.Capacity||null,students:codes(r.Students)})))}catch(e){alert('خطأ: '+e.message)}}}
-
-
-
-
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();
