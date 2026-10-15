@@ -211,3 +211,31 @@ async function relevelTab(b){
     for(const c of ch(P,300))await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.e.student_code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');
     const G={};P.forEach(x=>(G[x.g.id]=G[x.g.id]||[]).push(x.e.student_code));for(const id in G)for(const c of ch(G[id],100))await api(`enrollments?slot_id=eq.${id}&student_code=in.(${c.map(z=>encodeURIComponent(z)).join(',')})`,'DELETE');
     for(const c of ch(P,300))await notify(c.map(x=>x.e.student_code),'تم تعديل جدولك','تم نقلك إلى جروب جديد');alert('تم نقل '+P.length+' طالب');relevelTab(b)}catch(er){alert(er.message)}}})}
+
+// ===== جروب جديد: يدوي + رفع إكسيل، مع كشف التعارض والتكرار =====
+async function newSlotTab(b){
+ const staff=await api('staff?select=code,name,role,roles&order=name'),lecs=staff.filter(s=>(s.roles||[s.role]).includes('lecturer')),SC=new Set(staff.map(s=>s.code));
+ b.innerHTML=`<div class="card"><h3>إضافة جروب يدوياً</h3><label>اليوم</label><select id="d">${DAYS.map(d=>`<option>${d}</option>`).join('')}</select><label>من</label><input type="time" id="f"><label>إلى</label><input type="time" id="t"><label>الكلاس / المكان</label><input id="p"><label>الليفل</label><input id="l"><label>المحاضر (اختياري)</label><select id="lc"><option value="">بدون محاضر</option>${lecs.map(l=>`<option value="${l.code}">${esc(l.name)}</option>`).join('')}</select><label>الحد الأقصى للطلاب (اختياري)</label><input type="number" id="cp" min="1" placeholder="الافتراضي 35"><label>أكواد الطلاب لتسجيلهم (اختياري)</label><textarea id="cs" rows="2" placeholder="اتركه فارغاً لإنشاء الجروب بدون طلاب"></textarea><button class="btn" id="sv">حفظ الجروب</button></div>
+ <div class="card"><h3>رفع جروبات من إكسيل</h3><p>الأعمدة: Day, From, To, Class, Level, Lecturer, Capacity, Students. الأعمدة Lecturer وCapacity وStudents اختيارية (Students أكواد مفصولة بمسافة أو فاصلة). يُرفض أي جروب يتعارض موعده مع جروب قائم في نفس الكلاس، وإن وُجد جروب بنفس البيانات تُسأل عن تحديثه.</p><input type="file" id="fx" accept=".xlsx,.xls,.csv"><button class="btn alt" id="up">رفع وتنفيذ</button><button class="btn" id="tp" type="button">تحميل القالب</button></div><div id="rs"></div>`;
+ const T=v=>{try{return v==null||v===''?null:tm(v)}catch(e){return null}},codes=v=>String(v||'').split(/[\s,؛;]+/).filter(Boolean);
+ const run=async recs=>{
+  const E=await all('slots?select=id,day,start_time,end_time,place,level,lecturer_code,capacity'),res=[];E.forEach(e=>{e.s=fmt(e.start_time);e.e=fmt(e.end_time)});
+  for(const r of recs){const row={r,st:'',note:''};res.push(row);
+   if(!r.day||!r.start||!r.end||!r.place){row.st='مرفوض';row.note='بيانات ناقصة أو وقت غير مفهوم (اليوم / من / إلى / الكلاس)';continue}
+   if(r.start>=r.end){row.st='مرفوض';row.note='وقت البداية يجب أن يسبق وقت النهاية';continue}
+   const same=E.find(e=>e.day==r.day&&nzp(e.place)==nzp(r.place)&&e.s==r.start&&e.e==r.end);if(same){row.st='موجود';row.slot=same;continue}
+   const cf=E.find(e=>e.day==r.day&&nzp(e.place)==nzp(r.place)&&e.s<r.end&&r.start<e.e);if(cf){row.st='مرفوض';row.note=`تعارض مع جروب موجود في نفس الكلاس: ${cf.day} ${cf.s}–${cf.e} (${cf.place})`;continue}
+   const lc=r.lec&&SC.has(r.lec)?r.lec:null;if(r.lec&&!lc)row.note='كود المحاضر غير موجود فتم تجاهله. ';
+   const [g]=await api('slots','POST',{day:r.day,start_time:r.start,end_time:r.end,place:r.place,level:r.level,lecturer_code:lc,capacity:r.cap});g.day=r.day;g.s=r.start;g.e=r.end;g.place=r.place;E.push(g);row.slot=g;row.st='تم الإنشاء'}
+  const ex=res.filter(x=>x.st=='موجود');
+  if(ex.length&&confirm(`يوجد ${ex.length} جروب بنفس البيانات موجود مسبقاً:\n${ex.slice(0,5).map(x=>`${x.r.day} ${x.r.start}-${x.r.end} ${x.r.place}`).join('\n')}${ex.length>5?'\n...':''}\nهل تريد تحديث بياناته (الليفل / المحاضر / الحد الأقصى / الطلاب)؟`)){
+   for(const x of ex){const pa={};if(x.r.level)pa.level=x.r.level;if(x.r.lec&&SC.has(x.r.lec))pa.lecturer_code=x.r.lec;if(x.r.cap)pa.capacity=x.r.cap;if(Object.keys(pa).length)await api('slots?id=eq.'+x.slot.id,'PATCH',pa);x.st='موجود — تم التحديث'}
+  }else ex.forEach(x=>x.st='موجود — لم يُحدَّث');
+  const need=res.filter(x=>x.slot&&x.r.students.length&&(x.st=='تم الإنشاء'||x.st=='موجود — تم التحديث'));
+  if(need.length){const have=new Set((await all('students?select=code')).map(s=>s.code));for(const x of need){const ok=x.r.students.filter(c=>have.has(c)),miss=x.r.students.length-ok.length;
+   if(ok.length){await api('enrollments?on_conflict=student_code,slot_id','POST',ok.map(c=>({student_code:c,slot_id:x.slot.id})),'resolution=merge-duplicates,return=minimal');await notify(ok,'تحديث الجداول','تم تسجيلك في جروب جديد')}x.note+=`تم تسجيل ${ok.length} طالب`+(miss?`، وتخطي ${miss} كود غير مسجل`:'')}}
+  $('#rs').innerHTML=`<div class="card wrap"><h3>نتيجة العملية: ${res.filter(x=>x.st=='تم الإنشاء').length} أُنشئ، ${res.filter(x=>x.st=='مرفوض').length} مرفوض، ${res.filter(x=>x.st.startsWith('موجود')).length} موجود مسبقاً</h3><table class="table"><tr><th>#</th><th>الجروب</th><th>الحالة</th><th>ملاحظات</th></tr>${res.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.r.day)} ${esc(x.r.start)}–${esc(x.r.end)} | ${esc(x.r.place)} | ${esc(x.r.level)}</td><td class="${x.st=='مرفوض'?'bad':x.st=='تم الإنشاء'?'ok':''}"><b>${x.st}</b></td><td>${esc(x.note)}</td></tr>`).join('')}</table></div>`;
+  $('#rs').scrollIntoView({behavior:'smooth'})};
+ $('#sv').onclick=()=>run([{day:$('#d').value,start:$('#f').value,end:$('#t').value,place:S($('#p').value),level:S($('#l').value),lec:$('#lc').value||null,cap:+$('#cp').value||null,students:codes($('#cs').value)}]).catch(e=>alert(e.message));
+ $('#tp').onclick=()=>dl([['Day','From','To','Class','Level','Lecturer','Capacity','Students'],['Monday','9:00 AM','11:00 AM','0022','A1','L100','35','261541 261571'],['Tuesday','11:30 AM','3:30 PM','H028','B2','','','']],'groups_template.xlsx');
+ $('#up').onclick=async()=>{const f=$('#fx').files[0];if(!f)return alert('اختر ملفاً');try{const rows=await rd(f);await run(rows.filter(r=>r.Day||r.Class).map(r=>({day:r.Day?dayOf(r.Day):null,start:T(r.From),end:T(r.To),place:S(r.Class),level:S(r.Level),lec:S(r.Lecturer),cap:+r.Capacity||null,students:codes(r.Students)})))}catch(e){alert('خطأ: '+e.message)}}}
