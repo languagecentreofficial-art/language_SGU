@@ -276,61 +276,38 @@ async function newStudentTab(b){
    if(g){await api('enrollments','POST',{student_code:code,slot_id:g.id},'return=minimal');N[g.id]=(N[g.id]||0)+1}
    alert('تمت الإضافة'+(g?' وتسكينه في: '+g.day+' '+fmt(g.start_time)+'-'+fmt(g.end_time)+' كلاس '+g.place:'')+'. كلمة المرور = الكود.');['code','name','phone','section'].forEach(i=>$('#'+i).value='');fill()}catch(e){alert('تعذر الحفظ: '+e.message)}}}
 
-
-
-
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();
+// ===== الرئيسية: إحصائيات الأيام + الليفل المخالف + تقرير إحصائي للطباعة =====
+async function statData(){
+ const sl=await all('slots?select=id,day,start_time,end_time,place,level,capacity,lec:staff(name)&order=start_time'),N={};let bad=[],slow=false;
+ try{const [m,c]=await Promise.all([all('v_level_mismatch?select=student_code,name,student_level,slot_id&order=slot_id,student_code'),all('v_slot_counts?select=slot_id,n')]);bad=m;c.forEach(x=>N[x.slot_id]=x.n)}
+ catch(e){slow=true;(await all('enrollments?select=slot_id')).forEach(x=>N[x.slot_id]=(N[x.slot_id]||0)+1)}
+ return{sl,N,bad,slow}}
+async function homeTab(b){
+ b.innerHTML='<div class="msg">جارٍ تحميل الإحصائيات...</div>';
+ if(!document.getElementById('hm-css'))document.head.insertAdjacentHTML('beforeend','<style id="hm-css">.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;margin-bottom:18px}.dgrid .card{margin:0}.kp{display:flex;gap:10px;margin:8px 0 10px}.kp div{flex:1;background:#f5f7fd;border-radius:12px;padding:10px;text-align:center}.kp b{display:block;font-size:1.5rem;color:#12307a}.kp span{font-size:.78rem;color:#5d6b8f}.ph td{background:#eef2fb!important;color:#12307a;font-weight:700;font-size:.82rem}.sec{font-weight:800;color:#0a1a44;margin:22px 4px 10px;font-size:1.05rem}.nm{font-size:.82rem;color:#3b4660}.more{max-height:340px;overflow:auto;margin-top:10px}@media print{.rd{margin-bottom:16px}.rd .table tr{break-inside:avoid}.rd h3{margin:10px 0 6px;color:#0a1a44}}</style>');
+ const [a,c,d,e,f]=await Promise.all([count('students','code'),count('staff','code','&role=eq.lecturer'),count('slots','id'),count('change_requests','id','&status=eq.pending'),count('complaints','id','&status=eq.open')]),{sl,N,bad,slow}=await statData();
+ const S=Object.fromEntries(sl.map(x=>[x.id,x])),byDay={},cap=s=>capOf(s),n=s=>N[s.id]||0;sl.forEach(s=>(byDay[s.day]=byDay[s.day]||[]).push(s));
+ const srt=A=>[...A].sort((x,y)=>fmt(x.start_time).localeCompare(fmt(y.start_time))||fmt(x.end_time).localeCompare(fmt(y.end_time))||String(x.place).localeCompare(String(y.place),undefined,{numeric:true})),per=s=>fmt(s.start_time)+' – '+fmt(s.end_time);
+ const st=A=>({cl:new Set(A.map(s=>nzp(s.place))).size,pr:new Set(A.map(per)).size,sc:A.length,stu:A.reduce((t,s)=>t+n(s),0),ov:A.filter(s=>n(s)>cap(s))}),ds=DAYS.filter(x=>byDay[x]);
+ const moreTbl=A=>{let last='';return`<table class="table"><tr><th>الكلاس</th><th>الليفل</th><th>المحاضر</th><th>الطلاب</th></tr>${srt(A).map(s=>{const h=per(s)!=last?`<tr class="ph"><td colspan="4"><bdi dir="ltr">${per(s)}</bdi></td></tr>`:'';last=per(s);return h+`<tr><td>${esc(s.place)}</td><td>${esc(s.level)}</td><td>${esc(s.lec?.name||'—')}</td><td class="${n(s)>cap(s)?'bad':''}">${n(s)}/${cap(s)}</td></tr>`}).join('')}</table>`};
+ const MS=40;let ms=MS;
+ b.innerHTML=`<div class="stats">${[['الطلاب',a],['المحاضرون',c],['الجروبات',d],['طلبات تغيير معلّقة',e],['شكاوى مفتوحة',f]].map(([l,x])=>`<div class="stat"><b>${x}</b><span>${l}</span></div>`).join('')}</div>
+ <div class="sec">إحصائيات الأيام</div><div class="dgrid">${ds.map((x,i)=>{const s=st(byDay[x]);return`<div class="card"><h3>${x}</h3><div class="kp"><div><b>${s.cl}</b><span>كلاس</span></div><div><b>${s.pr}</b><span>فترة</span></div><div><b>${s.stu}</b><span>طالب</span></div></div><small class="note">${s.sc} سكشن${s.ov.length?` — <span class="bad">${s.ov.length} تجاوزت الحد الأقصى</span>`:''}</small><br><button type="button" class="chip" data-m="${i}">عرض المزيد</button><div class="more" id="m${i}" hidden>${moreTbl(byDay[x])}</div></div>`}).join('')||'<div class="msg">لا توجد جروبات</div>'}</div>
+ <div class="sec">طلاب في كلاس بليفل مختلف عن ليفلهم${slow?'':` (${bad.length})`}</div><div id="mm"></div>
+ <div class="sec">تقرير إحصائي للطباعة</div><div class="card noprint"><p class="note">اختر نوع التقرير والأيام والحقول المطلوب إظهارها، ثم اضغط عرض، ثم طباعة / PDF.</p><div class="msbar"><select id="pm" style="max-width:190px"><option value="g">تقرير عام</option><option value="d">تقرير تفصيلي</option></select>${multiSel('pdy','الأيام (بدون تحديد = الكل)',DAYS.filter(x=>byDay[x]).map(x=>[x,x]))}<button class="btn" id="pgo">عرض التقرير</button><button class="btn alt" id="ppr">طباعة / PDF</button></div><label>الحقول المطلوب إظهارها</label><div id="pf"></div></div><div id="po"></div>`;
+ b.querySelectorAll('[data-m]').forEach(k=>k.onclick=()=>{const x=$('#m'+k.dataset.m);x.hidden=!x.hidden;k.textContent=x.hidden?'عرض المزيد':'إخفاء'});
+ const drawMM=()=>{$('#mm').innerHTML=slow?'<div class="msg">لعرض الطلاب المخالفين بسرعة شغّل ملف <b>phase9.sql</b> في Supabase.</div>':bad.length?`<div class="card wrap"><table class="table"><tr><th>الطالب</th><th>ليفله</th><th>الكلاس الحالي</th></tr>${bad.slice(0,ms).map(x=>`<tr class="clk" data-ed="${esc(x.student_code)}"><td>${esc(x.name)}<br><small>${esc(x.student_code)}</small></td><td>${esc(x.student_level)}</td><td>${S[x.slot_id]?slotLb(S[x.slot_id]):'—'}</td></tr>`).join('')}</table>${ms<bad.length?`<button type="button" class="btn alt" id="mmo">عرض المزيد (${bad.length-ms})</button>`:''}<p class="note">اضغط على الطالب لتعديل بياناته.</p></div>`:'<div class="msg">لا يوجد طلاب بليفل مخالف.</div>';
+  $('#mm').querySelectorAll('[data-ed]').forEach(r=>r.onclick=()=>studentEditor(r.dataset.ed,()=>homeTab(b)));if($('#mmo'))$('#mmo').onclick=()=>{ms+=MS;drawMM()}};drawMM();
+ // التقرير
+ const FL=[['sum','ملخص اليوم (كلاسات / فترات / طلاب)'],['over','الكلاسات المتجاوزة للحد الأقصى'],['tbl','جدول السكاشن (الفترة، الكلاس، الليفل، المحاضر، العدد)'],['nm','أسماء الطلاب في كل سكشن'],['mm','الطلاب بليفل مخالف']],def={g:['sum','over'],d:['sum','over','tbl','nm','mm']};
+ const setF=()=>{$('#pf').innerHTML=FL.map(([k,l])=>`<button type="button" class="chip ${def[$('#pm').value].includes(k)?'on':''}" data-k="${k}">${l}</button>`).join('')};setF();$('#pm').onchange=setF;$('#pf').onclick=e=>{const c=e.target.closest('.chip');if(c)c.classList.toggle('on')};initMs(b);
+ const rep=async()=>{const sel=msVals('pdy'),days=ds.filter(x=>!sel.length||sel.includes(x)),F=new Set([...document.querySelectorAll('#pf .chip.on')].map(c=>c.dataset.k));if(!days.length)return alert('لا توجد أيام');
+  const names={};if(F.has('nm')){const ids=days.flatMap(x=>byDay[x].map(s=>s.id));for(let i=0;i<ids.length;i+=60)(await all(`enrollments?slot_id=in.(${ids.slice(i,i+60).join(',')})&select=slot_id,student:students(code,name,level)&order=slot_id,student_code`)).forEach(r=>(names[r.slot_id]=names[r.slot_id]||[]).push(r.student))}
+  const lv=v=>String(v||'').trim().toUpperCase(),block=x=>{const A=byDay[x],s=st(A);let h=`<div class="rd"><h3>${x}</h3>`;
+   if(F.has('sum'))h+=`<table class="table"><tr><th>عدد الكلاسات</th><th>عدد الفترات</th><th>عدد السكاشن</th><th>عدد الطلاب</th></tr><tr><td>${s.cl}</td><td>${s.pr}</td><td>${s.sc}</td><td>${s.stu}</td></tr></table>`;
+   if(F.has('over'))h+=`<p><b>الكلاسات المتجاوزة للحد الأقصى (${s.ov.length}):</b> ${s.ov.length?s.ov.map(g=>`${esc(g.place)} <bdi dir="ltr">${per(g)}</bdi> (${n(g)}/${cap(g)})`).join('، '):'لا يوجد'}</p>`;
+   if(F.has('tbl')||F.has('nm')){let last='';h+=`<table class="table"><tr><th>الكلاس</th><th>الليفل</th><th>المحاضر</th><th>الطلاب</th></tr>${srt(A).map(g=>{const ph=per(g)!=last?`<tr class="ph"><td colspan="4">الفترة <bdi dir="ltr">${per(g)}</bdi></td></tr>`:'';last=per(g);return ph+`<tr><td>${esc(g.place)}</td><td>${esc(g.level)}</td><td>${esc(g.lec?.name||'—')}</td><td class="${n(g)>cap(g)?'bad':''}">${n(g)}/${cap(g)}</td></tr>`+(F.has('nm')?`<tr><td colspan="4" class="nm">${(names[g.id]||[]).map(t=>lv(t.level)&&lv(g.level)&&lv(t.level)!=lv(g.level)?`<b class="bad">${esc(t.name)} (${esc(t.level)})</b>`:esc(t.name)).join('، ')||'—'}</td></tr>`:'')}).join('')}</table>`}
+   if(F.has('mm')){const m=bad.filter(y=>S[y.slot_id]?.day==x);h+=`<p><b>طلاب بليفل مخالف (${m.length}):</b></p>${m.length?`<table class="table"><tr><th>الطالب</th><th>الكود</th><th>ليفله</th><th>الكلاس الحالي</th></tr>${m.map(y=>`<tr><td>${esc(y.name)}</td><td>${esc(y.student_code)}</td><td>${esc(y.student_level)}</td><td>${esc(S[y.slot_id].place)} <bdi dir="ltr">${per(S[y.slot_id])}</bdi> (${esc(S[y.slot_id].level)})</td></tr>`).join('')}</table>`:'<p>لا يوجد</p>'}`}
+   return h+'</div>'};
+  $('#po').innerHTML=`<div class="printarea"><div class="printhead"><img src="assets/logo.png" height="64" alt=""><div><b>كورس اللغة الإنجليزية</b><br>جامعة الصالحية الجديدة<br>تقرير إحصائي ${$('#pm').value=='d'?'تفصيلي':'عام'} — ${today()}</div></div>${days.map(block).join('')}</div>`;$('#po').scrollIntoView({behavior:'smooth'})};
+ $('#pgo').onclick=()=>rep().catch(e=>alert(e.message));$('#ppr').onclick=async()=>{if(!$('#po').innerHTML)await rep();print()}}

@@ -100,67 +100,10 @@ async function permTab(b){
  const as=await api('staff?select=code,name,role,roles,perms&order=name'),R=[['admin','أدمن'],['assistant','مساعد أدمن'],['affairs','شؤون الطلاب'],['lecturer','محاضر']],PRI=R.map(x=>x[0]),T=TABNAMES.filter(t=>!['الصلاحيات','حسابات'].includes(t));
  b.innerHTML=`<div class="card"><h3>اختيار الشخص</h3><label>الحساب</label><select id="ps"><option value="">اختر الشخص...</option>${as.map(a=>`<option value="${a.code}">${esc(a.name)} (${a.code})</option>`).join('')}</select></div><div id="pb"></div>`;
  $('#ps').onchange=()=>{const a=as.find(x=>x.code==$('#ps').value);if(!a){$('#pb').innerHTML='';return}const rs=a.roles||[a.role];
-  $('#pb').innerHTML=`<div class="card"><h3>صلاحيات ${esc(a.name)}</h3><label>الصفات — اضغط لاختيار واحدة أو أكثر</label><div id="rc">${R.map(([k,l])=>`<button type="button" class="chip ${rs.includes(k)?'on':''}" data-k="${k}">${l}</button>`).join('')}</div><label>الأقسام المسموح له برؤيتها — اختر ما تشاء</label><div id="tc">${T.map(t=>`<button type="button" class="chip ${a.perms?.[t]?'on':''}" data-k="${t}">${t}</button>`).join('')}</div><button type="button" class="btn alt" id="sa">تحديد كل الأقسام</button><button type="button" class="btn alt" id="sn">مسح الأقسام</button><button type="button" class="btn" id="sv">حفظ الصلاحيات</button></div>`;
+  $('#pb').innerHTML=`<div class="card"><h3>صلاحيات ${esc(a.name)}</h3><label>الصفات — اضغط لاختيار واحدة أو أكثر (للدخول إلى لوحة الإدارة يلزم: أدمن أو مساعد أدمن أو شؤون الطلاب)</label><div id="rc">${R.map(([k,l])=>`<button type="button" class="chip ${rs.includes(k)?'on':''}" data-k="${k}">${l}</button>`).join('')}</div><label>الأقسام المسموح له برؤيتها — اختر ما تشاء</label><div id="tc">${T.map(t=>`<button type="button" class="chip ${a.perms?.[t]?'on':''}" data-k="${t}">${t}</button>`).join('')}</div><button type="button" class="btn alt" id="sa">تحديد كل الأقسام</button><button type="button" class="btn alt" id="sn">مسح الأقسام</button><button type="button" class="btn" id="sv">حفظ الصلاحيات</button></div>`;
   $('#pb').onclick=e=>{const c=e.target.closest('.chip');if(c)c.classList.toggle('on')};
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
-   await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
-
-
-
-
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();
+   const panel=['admin','assistant','affairs'];let added=false;if(Object.keys(p).length&&!roles.some(r=>panel.includes(r))){roles.push('assistant');added=true;const c=document.querySelector('#rc .chip[data-k=assistant]');if(c)c.classList.add('on')}
+   if(roles.includes('assistant')&&!roles.includes('admin')&&!Object.keys(p).length&&!confirm('لم تحدد أي أقسام، فلن يرى المساعد أي تبويب. متابعة؟'))return;
+   await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات'+(added?'\nلأنك حددت أقساماً، أُضيفت للشخص صفة "مساعد أدمن" تلقائياً ليتمكن من الدخول إلى لوحة الإدارة.':'')+'\nيجب على الشخص تسجيل الخروج ثم الدخول ليرى التغيير.')}}}
