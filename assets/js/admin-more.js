@@ -107,3 +107,63 @@ async function permTab(b){
    const panel=['admin','assistant','affairs'];let added=false;if(Object.keys(p).length&&!roles.some(r=>panel.includes(r))){roles.push('assistant');added=true;const c=document.querySelector('#rc .chip[data-k=assistant]');if(c)c.classList.add('on')}
    if(roles.includes('assistant')&&!roles.includes('admin')&&!Object.keys(p).length&&!confirm('لم تحدد أي أقسام، فلن يرى المساعد أي تبويب. متابعة؟'))return;
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات'+(added?'\nلأنك حددت أقساماً، أُضيفت للشخص صفة "مساعد أدمن" تلقائياً ليتمكن من الدخول إلى لوحة الإدارة.':'')+'\nيجب على الشخص تسجيل الخروج ثم الدخول ليرى التغيير.')}}}
+
+
+
+
+
+(function() {
+    // 1. منع القائمة المنسدلة (Right-Click)
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    }, false);
+
+    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
+    document.addEventListener('keydown', function(e) {
+        // منع F12
+        if (e.key === "F12" || e.keyCode === 123) {
+            e.preventDefault();
+            return false;
+        }
+
+        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
+        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
+            e.preventDefault();
+            return false;
+        }
+
+        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
+        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+    }, false);
+
+    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
+    let devtoolsOpen = false;
+    const threshold = 160;
+
+    setInterval(function() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        
+        if (widthThreshold || heightThreshold) {
+            if (!devtoolsOpen) {
+                devtoolsOpen = true;
+                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
+            }
+        } else {
+            devtoolsOpen = false;
+        }
+    }, 500);
+
+    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
+})();
