@@ -8,10 +8,10 @@ const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${titl
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
 // ===== رفع الطلاب فقط =====
-const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
- ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022']],'students_template.xlsx'),
- async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place,is_new')).map(s=>[s.code,s]));
-  const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
+const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, StudyLevel (المستوى الدراسي مثل المستوى الأول), Level (الليفل A1/B1), Section. الكلاس يُحدَّد من تسكين الطالب في الجروبات. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
+ ()=>dl([['Code','Name','Phone','Faculty','StudyLevel','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','المستوى الأول','B2','Section A1','Class 0022']],'students_template.xlsx'),
+ async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,study_level,section,place,is_new')).map(s=>[s.code,s]));
+  const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:/مستوى/.test(S(r.Level)||'')?(o.level||null):(S(r.Level)||o.level||null),study_level:S(r.StudyLevel)||S(r['المستوى الدراسي'])||(/مستوى/.test(S(r.Level)||'')?S(r.Level):null)||o.study_level||null,section:S(r.Section)||o.section||null,place:o.place||null,is_new:o.code?o.is_new:true}});
   const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);const tot=nw.length+ex.length;let done=0;const prog=()=>{const g=document.querySelector('#go');if(g)g.textContent='جارٍ الرفع '+done+' / '+tot};try{for(const c of chunk(nw,100)){await api('students','POST',c,'return=minimal');done+=c.length;prog()}for(const c of chunk(ex,250)){await api('students?on_conflict=code','POST',c,'resolution=merge-duplicates,return=minimal');done+=c.length;prog()}}finally{const g=document.querySelector('#go');if(g)g.textContent='رفع وتنفيذ'}return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
@@ -107,61 +107,3 @@ async function permTab(b){
    const panel=['admin','assistant','affairs'];let added=false;if(Object.keys(p).length&&!roles.some(r=>panel.includes(r))){roles.push('assistant');added=true;const c=document.querySelector('#rc .chip[data-k=assistant]');if(c)c.classList.add('on')}
    if(roles.includes('assistant')&&!roles.includes('admin')&&!Object.keys(p).length&&!confirm('لم تحدد أي أقسام، فلن يرى المساعد أي تبويب. متابعة؟'))return;
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات'+(added?'\nلأنك حددت أقساماً، أُضيفت للشخص صفة "مساعد أدمن" تلقائياً ليتمكن من الدخول إلى لوحة الإدارة.':'')+'\nيجب على الشخص تسجيل الخروج ثم الدخول ليرى التغيير.')}}}
-
-
-
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();
