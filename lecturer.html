@@ -1,5 +1,5 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light only"><meta name="theme-color" content="#17306b"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/style.css"><title>المحاضر</title></head><body><main><div id="v"></div></main>
-<script src="assets/js/app.js?v=35"></script><script>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light only"><meta name="theme-color" content="#17306b"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/style.css?v=38"><title>المحاضر</title></head><body><main><div id="v"></div></main>
+<script src="assets/js/app.js?v=38"></script><script src="assets/js/content.js?v=1"></script><script>
 const u=guard(['lecturer','admin','assistant']);shell(u);
 tabs([
 ['تسجيل الغياب',async b=>{const today=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
@@ -37,6 +37,7 @@ tabs([
     if(x.from_slot&&x.from_slot!=to.id)await api(`enrollments?student_code=eq.${encodeURIComponent(x.student_code)}&slot_id=eq.${x.from_slot}`,'DELETE');
     await api('change_requests?id=eq.'+x.id,'PATCH',{status:'approved'});notify([x.student_code],'تمت الموافقة على طلبك','وافق المحاضر '+u.name+' على نقلك إلى '+to.day+' كلاس '+to.place);alert('تمت الموافقة');tr.remove();$('#dt').innerHTML=''}catch(e){alert(e.message)}};
   $('#rj').onclick=async()=>{const w=$('#rr').value.trim();if(!w)return alert('اكتب سبب الرفض');try{if(!await still())return;await api('change_requests?id=eq.'+x.id,'PATCH',{status:'rejected',reject_reason:w+' (المحاضر: '+u.name+')'});notify([x.student_code],'تم رفض طلبك',w);alert('تم الرفض');tr.remove();$('#dt').innerHTML=''}catch(e){alert(e.message)}}})}],
+['المحتوى',b=>lecContentTab(b,u)],
 ['ملفي',async b=>{const [s]=await api('staff?code=eq.'+u.code+'&select=code,name,phone');b.innerHTML=`<div class="card"><h3>${esc(s.name)}</h3><label>رقم الهاتف</label><input id="ph" value="${esc(s.phone)}"><button class="btn" id="sv">حفظ</button></div>`;$('#sv').onclick=async()=>{await api('staff?code=eq.'+u.code,'PATCH',{phone:$('#ph').value});alert('تم')};changePassForm(b,u)}]
 ],$('#v'));
 </script></body></html>
