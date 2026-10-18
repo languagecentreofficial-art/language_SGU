@@ -12,7 +12,13 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
  ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022']],'students_template.xlsx'),
  async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,level,section,place,is_new')).map(s=>[s.code,s]));
   const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
-  const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)`});
+  const U=[...new Map(out.map(r=>[r.code,r])).values()],ck=(x,n)=>Array.from({length:Math.ceil(x.length/n)},(_,k)=>x.slice(k*n,k*n+n)),
+   nw=U.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=U.filter(r=>old[r.code]).map(({is_new,...r})=>r),
+   F=['name','phone','college','level','section','place'],chg=ex.filter(r=>F.some(k=>(r[k]||null)!==(old[r.code][k]||null)));
+  /* تشفير كلمة المرور (bcrypt) يتم لكل صف جديد، لذلك الجدد دفعات صغيرة، والموجودون يُحدَّث منهم المتغيّر فقط بدون upsert */
+  for(const c of ck(nw,30))await api('students','POST',c,'return=minimal');
+  for(const c of ck(chg,10))await Promise.all(c.map(({code,...d})=>api('students?code=eq.'+encodeURIComponent(code),'PATCH',d)));
+  return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (تم تحديث ${chg.length} منهم، والباقي بلا تغيير، وكلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
 const LA={code:['code','كود','الكود','lecturercode'],name:['name','الاسم','اسم'],phone:['phone','mobile','tel','الهاتف','رقمالهاتف'],role:['role','الصلاحية'],day:['day','اليوم'],from:['from','start','starttime','من'],to:['to','end','endtime','الى','إلى'],cls:['class','classroom','room','place','كلاس','الكلاس'],level:['level','englishlevel','الليفل']};
@@ -105,8 +111,6 @@ async function permTab(b){
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
-
-
 (function() {
     // 1. منع القائمة المنسدلة (Right-Click)
     document.addEventListener('contextmenu', function(e) {
