@@ -4,7 +4,8 @@ const S=v=>v==null?null:String(v).trim()||null;
 const tm=v=>{if(v instanceof Date)return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');if(typeof v=='number'){let m=Math.round((v-Math.floor(v))*1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}return t24(String(v))};
 const nA=x=>String(x).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim();
 const dayOf=v=>{const s=String(v).trim().toLowerCase(),k=s.length>=3&&Object.keys(EN2AR).find(k=>k.startsWith(s.slice(0,3)));if(k)return EN2AR[k];return DAYS.find(d=>nA(d)==nA(s))||String(v).trim()};
-const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');try{alert(await run(await rd(f)))}catch(e){alert('خطأ: '+e.message)}}};
+const upProg=(d,t,l)=>{const e=document.getElementById('upp');if(e)e.innerHTML=`<div class="note"><b>${l||''}</b> ${t?d+' / '+t+' ('+Math.round(d/t*100)+'%)':''}</div><progress style="width:100%;height:18px" ${t?`max="${t}" value="${d}"`:''}></progress>`};
+const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button><div id="upp" style="margin-top:12px"></div></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');const g=$('#go');g.disabled=true;upProg(0,0,'جارٍ قراءة الملف...');try{const rw=await rd(f);upProg(0,0,'جارٍ التنفيذ... لا تغلق الصفحة');const m=await run(rw);upProg(1,1,'اكتمل ✔');alert(m)}catch(e){upProg(0,0,'');$('#upp').innerHTML='<div class="msg">توقف الرفع: '+esc(e.message)+'</div>';alert('خطأ: '+e.message)}g.disabled=false}};
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
 // ===== رفع الطلاب فقط =====
@@ -16,8 +17,9 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
    nw=U.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=U.filter(r=>old[r.code]).map(({is_new,...r})=>r),
    F=['name','phone','college','study_level','level','section','place'],chg=ex.filter(r=>F.some(k=>(r[k]||null)!==(old[r.code][k]||null)));
   /* تشفير كلمة المرور (bcrypt) يتم لكل صف جديد، لذلك الجدد دفعات صغيرة، والموجودون يُحدَّث منهم المتغيّر فقط بدون upsert */
-  for(const c of ck(nw,30))await api('students','POST',c,'return=minimal');
-  for(const c of ck(chg,10))await Promise.all(c.map(({code,...d})=>api('students?code=eq.'+encodeURIComponent(code),'PATCH',d)));
+  const TT=nw.length+chg.length;let dn=0;upProg(0,TT,'جارٍ الحفظ');
+  for(const c of ck(nw,30)){await api('students','POST',c,'return=minimal');dn+=c.length;upProg(dn,TT,'إضافة الطلاب الجدد')}
+  for(const c of ck(chg,10)){await Promise.all(c.map(({code,...d})=>api('students?code=eq.'+encodeURIComponent(code),'PATCH',d)));dn+=c.length;upProg(dn,TT,'تحديث بيانات الموجودين')}
   return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (تم تحديث ${chg.length} منهم، والباقي بلا تغيير، وكلمة المرور لم تتغير)`});
 
 // ===== رفع المحاضرين والتوقيتات =====
@@ -111,7 +113,6 @@ async function permTab(b){
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
-
 (function() {
     // 1. منع القائمة المنسدلة (Right-Click)
     document.addEventListener('contextmenu', function(e) {
