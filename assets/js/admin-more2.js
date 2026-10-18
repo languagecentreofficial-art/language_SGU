@@ -1,4 +1,5 @@
 const capOf=s=>s.capacity||35;
+const abCss=()=>{if(document.getElementById('ab-css'))return;document.head.insertAdjacentHTML('beforeend','<style id="ab-css">.abar{position:fixed;bottom:0;left:0;right:252px;z-index:25;background:#0a1a44;color:#fff;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:3px solid #d4a63a;box-shadow:0 -6px 20px #0a1a4440}.abar span{flex:1;min-width:180px}.abar progress{width:160px;vertical-align:middle}@media(max-width:860px){.abar{right:0}}</style>')};
 const slotLb=s=>`${s.day} ${fmt(s.start_time)}-${fmt(s.end_time)} | ${esc(s.place)} | ${esc(s.level)}`;
 const chk=(n,c)=>`<label style="display:inline-block;margin-inline-end:14px"><input type="checkbox" class="${c}" value="${n}" checked> ${n}</label>`;
 // ===== معاينة الجداول (تحميل عند الطلب حسب الفلاتر) =====
@@ -74,6 +75,7 @@ async function complainTab(b){
 
 // ===== الطلاب الجدد (سريع) + اقتراح التوزيع حسب الليفل =====
 async function newTab(b){
+ abCss();
  b.innerHTML='<div class="msg">جارٍ التحميل...</div>';
  const lv=x=>String(x||'').trim().toUpperCase(),SEL=await api('students?select=study_level&limit=1').then(()=>'code,name,college,level,section,place,study_level').catch(()=>'code,name,college,level,section,place'),adm=me().role=='admin',N={},E={},enc=a=>encodeURIComponent('('+a.map(c=>'"'+c+'"').join(',')+')');
  const [sl,NEWS0]=await Promise.all([all('slots?select=id,day,start_time,end_time,place,level,capacity&order=day,start_time'),all(`students?is_new=eq.true&select=${SEL}&order=created_at.desc`)]);
@@ -105,7 +107,7 @@ async function newTab(b){
    await api('students?code=eq.'+encodeURIComponent(code),'PATCH',{is_new:false});notify([code],'تم تحديد جدولك',`${to.day} ${fmt(to.start_time)}-${fmt(to.end_time)} كلاس ${to.place}`);NEWS=NEWS.filter(s=>s.code!=code);if(mode=='new')cur=cur.filter(s=>s.code!=code);render()}catch(x){alert(x.message);t.value=''}});
  // ===== الاقتراح التلقائي =====
  const pcell=i=>{const x=plan[i],d=dec[i];return typeof d=='number'?`<b>${slotLb(S[d])}</b> <button type="button" class="chip" data-pman="${i}">تغيير</button><button type="button" class="chip" data-prs="${i}">إلغاء اليدوي</button>`:`<select data-ppi="${i}">${x.t?`<option value="auto" ${d=='auto'?'selected':''}>المقترح: ${slotLb(x.t)}</option>`:''}<option value="skip" ${d=='skip'?'selected':''}>${x.t?'عدم التسكين':'لا يوجد مكان — اختر يدوياً'}</option></select> <button type="button" class="chip" data-pman="${i}">اختيار يدوي</button>`};
- const pdraw=()=>{const ok=dec.filter(d=>d!='skip').length;$('#sp').innerHTML=`<div class="card wrap"><h3>المقترح: ${plan.filter(x=>x.t).length} لهم مكان، ${plan.filter(x=>!x.t).length} بلا مكان (توزيع يدوي) — المحدد للتسكين: <span id="pc">${ok}</span></h3><button class="btn no" id="pex2" style="margin:0 0 12px">✔ تنفيذ الاقتراح (تسكين المحددين)</button><table class="table"><tr><th>الطالب</th><th>ليفله</th><th>القرار</th></tr>${plan.slice(0,pshown).map((x,i)=>`<tr><td>${esc(x.s.name)}<br><small>${esc(x.s.code)}</small></td><td>${esc(x.s.level)}</td><td id="pc${i}">${pcell(i)}</td></tr>`).join('')}</table>${pshown<plan.length?`<button class="btn alt" id="pmo">عرض المزيد (${plan.length-pshown})</button>`:''}<button class="btn no" id="pex">تسكين المحددين</button></div>`;if($('#pmo'))$('#pmo').onclick=()=>{pshown+=100;pdraw()}};
+ const pdraw=()=>{const ok=dec.filter(d=>d!='skip').length;$('#sp').innerHTML=`<div class="card wrap"><h3>المقترح: ${plan.filter(x=>x.t).length} لهم مكان، ${plan.filter(x=>!x.t).length} بلا مكان (توزيع يدوي) — المحدد للتسكين: <span id="pc">${ok}</span></h3><button class="btn no" id="pex2" style="margin:0 0 12px">✔ تنفيذ الاقتراح (تسكين المحددين)</button><table class="table"><tr><th>الطالب</th><th>ليفله</th><th>القرار</th></tr>${plan.slice(0,pshown).map((x,i)=>`<tr><td>${esc(x.s.name)}<br><small>${esc(x.s.code)}</small></td><td>${esc(x.s.level)}</td><td id="pc${i}">${pcell(i)}</td></tr>`).join('')}</table>${pshown<plan.length?`<button class="btn alt" id="pmo">عرض المزيد (${plan.length-pshown})</button>`:''}<button class="btn no" id="pex">تسكين المحددين</button></div><div style="height:76px"></div><div class="abar"><span>طبّق الاقتراح على المحددين (يمكنك تغيير أو تخطي أي طالب أعلاه)</span><button class="btn no" id="pex3" style="margin:0">✔ تنفيذ الاقتراح (تسكين المحددين)</button></div>`;if($('#pmo'))$('#pmo').onclick=()=>{pshown+=100;pdraw()}};
  $('#sg').onclick=()=>{const R=rules(),M={...N},un=NEWS.filter(s=>!(E[s.code]||[]).length).sort((a,b)=>lv(a.level).localeCompare(lv(b.level))||String(a.name).localeCompare(String(b.name)));pshown=100;
   plan=un.map(s=>{const c=cands(s,R).filter(x=>(M[x.id]||0)<capOf(x)).sort((p,q)=>(M[p.id]||0)/capOf(p)-(M[q.id]||0)/capOf(q)),t=c[0];if(t)M[t.id]=(M[t.id]||0)+1;return{s,t}});dec=plan.map(x=>x.t?'auto':'skip');
   if(!plan.length){$('#sp').innerHTML='<div class="msg">لا يوجد طلاب جدد غير مسكَّنين.</div>';return}pdraw()};
@@ -113,7 +115,7 @@ async function newTab(b){
  $('#sp').addEventListener('click',async e=>{const m=e.target.closest('[data-pman]'),r=e.target.closest('[data-prs]');
   if(m){const i=+m.dataset.pman,L=sl.filter(x=>lv(x.level)==lv(plan[i].s.level));$('#pc'+i).innerHTML=`<select data-pmi="${i}"><option value="">اختر جروباً...</option>${L.map(x=>`<option value="${x.id}">${slotLb(x)} (${N[x.id]||0}/${capOf(x)})</option>`).join('')}</select>`}
   if(r){const i=+r.dataset.prs;dec[i]=plan[i].t?'auto':'skip';$('#pc'+i).innerHTML=pcell(i);$('#pc').textContent=dec.filter(d=>d!='skip').length}
-  if(e.target.id=='pex'||e.target.id=='pex2'){const P=[];dec.forEach((d,i)=>{const x=plan[i],t=d=='auto'?x.t:d=='skip'?null:S[d];if(t)P.push({s:x.s,t})});if(!P.length)return alert('لم تحدد أي تسكين');
+  if(e.target.id=='pex'||e.target.id=='pex2'||e.target.id=='pex3'){const P=[];dec.forEach((d,i)=>{const x=plan[i],t=d=='auto'?x.t:d=='skip'?null:S[d];if(t)P.push({s:x.s,t})});if(!P.length)return alert('لم تحدد أي تسكين');
    const add={};P.forEach(x=>add[x.t.id]=(add[x.t.id]||0)+1);const over=Object.keys(add).filter(id=>(N[id]||0)+add[id]>capOf(S[id]));if(over.length&&!adm)return alert('بعض الاختيارات اليدوية ستتجاوز الحد الأقصى ولا يسمح بذلك إلا للأدمن');
    if(!confirm('تسكين '+P.length+' طالب'+(over.length?'\nتنبيه: سيتجاوز '+over.length+' جروب الحد الأقصى':'')+'؟'))return;
    try{const ch=(a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,k)=>a.slice(k*n,k*n+n));for(const c of ch(P,300))await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.s.code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');
@@ -199,34 +201,53 @@ async function studentsDataTab(b){
  b.innerHTML=`<div class="card noprint" id="flt"><div class="msbar"><input id="q" placeholder="بحث بالاسم أو الكود">${ms('fc','الكلية','college')}${ms('fl','المستوى','level')}${ms('fs','السكشن','section')}${ms('fy','المستوى الدراسي','study_level')}${multiSel('fp','الكلاس',[['__none','— بدون كلاس (غير موزع) —'],...u('place').map(v=>[v,v])])}${multiSel('fi','الحقول الناقصة',[['college','الكلية'],['study_level','المستوى الدراسي'],['level','الليفل'],['section','السكشن'],['place','الكلاس']])}<select id="fm"><option value="">كل الطلاب (بدون فلتر نقص)</option><option value="any">ناقص في أي من الحقول المحددة</option><option value="all">ناقص في كل الحقول المحددة</option></select><button class="btn" id="go">عرض</button></div></div><div id="aup"></div><div id="rs"></div>`;
  initMs($('#flt'));const pick=msVals,on=new Set(C.map(c=>c[0]));let rows=[];
  
- /* ===== توزيع تلقائي لغير الموزعين (نفس ليفل الطالب، قواعد الأيام، الأقل ازدحاماً) ===== */
- const autoDist=async()=>{const bt=$('#au'),box=$('#aup'),L=x=>String(x||'').trim().toUpperCase(),ck=(a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,k)=>a.slice(k*n,k*n+n)),enc=a=>encodeURIComponent('('+a.map(c=>'"'+c+'"').join(',')+')'),adm=me().role=='admin';bt.disabled=true;
+ /* ===== توزيع تلقائي لغير الموزعين (نفس ليفل الطالب، قواعد الأيام، الأقل ازدحاماً) + معاينة قابلة للتعديل ===== */
+ const autoDist=async()=>{abCss();const bt=$('#au'),box=$('#aup'),L=x=>String(x||'').trim().toUpperCase(),ck=(a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,k)=>a.slice(k*n,k*n+n)),enc=a=>encodeURIComponent('('+a.map(c=>'"'+c+'"').join(',')+')'),adm=me().role=='admin';bt.disabled=true;
   try{box.innerHTML='<div class="msg">جارٍ تحليل الجداول والطلاب...</div>';
    const [sl,DR]=await Promise.all([all('slots?select=id,day,start_time,end_time,place,level,capacity'),api('day_rules?active=eq.true&select=*').catch(()=>[])]),N={};
    try{(await all('v_slot_counts?select=slot_id,n')).forEach(x=>N[x.slot_id]=x.n)}catch(e){(await all('enrollments?select=slot_id')).forEach(x=>N[x.slot_id]=(N[x.slot_id]||0)+1)}
    const has=new Set();for(const c of ck(rows.map(r=>r.code),120))(await api(`enrollments?student_code=in.${enc(c)}&select=student_code`)).forEach(x=>has.add(x.student_code));
    const un=rows.filter(r=>!has.has(r.code)).sort((a,c)=>L(a.level).localeCompare(L(c.level))||String(a.name).localeCompare(String(c.name),'ar'));
    if(!un.length){box.innerHTML='<div class="msg">لا يوجد طلاب غير موزعين ضمن النتائج الحالية.</div>';bt.disabled=false;return}
-   const M={...N},SM=Object.fromEntries(sl.map(x=>[x.id,x])),plan=[];let ruled=0;
-   un.forEach(st=>{let why='',t=null;const al=allowedDays(st,DR);if(al)ruled++;
-    if(!L(st.level))why='ليفل الطالب غير محدد';
-    else{const lvl=sl.filter(x=>L(x.level)==L(st.level));if(!lvl.length)why='لا يوجد جروب بنفس الليفل';
-     else{const ok=al?lvl.filter(x=>al.has(x.day)):lvl;if(!ok.length)why='قواعد الأيام لا تسمح بأي جروب بنفس الليفل';
-      else{const free=ok.filter(x=>(M[x.id]||0)<capOf(x));if(!free.length)why='كل الجروبات المناسبة ممتلئة';
-       else{const D={};free.forEach(x=>{const d=D[x.day]=D[x.day]||{n:0,c:0};d.n+=M[x.id]||0;d.c+=capOf(x)});
-        const dl=x=>D[x.day].n/D[x.day].c;t=free.slice().sort((p,q)=>dl(p)-dl(q)||(M[p.id]||0)/capOf(p)-(M[q.id]||0)/capOf(q)||fmt(p.start_time).localeCompare(fmt(q.start_time)))[0];M[t.id]=(M[t.id]||0)+1}}}}
-    plan.push({st,t,why})});
-   const P=plan.filter(x=>x.t),X=plan.filter(x=>!x.t),by={};P.forEach(x=>by[x.t.id]=(by[x.t.id]||0)+1);
-   box.innerHTML=`<div class="card wrap"><h3>معاينة التوزيع التلقائي</h3><p>غير موزعين: <b>${un.length}</b> — سيُسكَّن: <b class="ok">${P.length}</b> — لا مكان لهم: <b class="bad">${X.length}</b>${ruled?` — طُبِّقت قواعد الأيام على <b>${ruled}</b> طالب`:''}</p>
-   <table class="table"><tr><th>الجروب</th><th>سيُضاف</th><th>الإشغال بعد التوزيع</th></tr>${Object.keys(by).map(id=>SM[id]).sort((a,c)=>DAYS.indexOf(a.day)-DAYS.indexOf(c.day)||fmt(a.start_time).localeCompare(fmt(c.start_time))).map(g=>`<tr><td>${slotLb(g)}</td><td>${by[g.id]}</td><td>${M[g.id]||0} / ${capOf(g)}</td></tr>`).join('')||'<tr><td colspan="3">—</td></tr>'}</table>
-   ${X.length?`<h3 style="margin-top:16px">طلاب لم يُجد لهم مكان (${X.length}) — يُوزَّعون يدوياً</h3><table class="table"><tr><th>الطالب</th><th>الليفل</th><th>السبب</th></tr>${X.slice(0,100).map(x=>`<tr><td>${esc(x.st.name)}<br><small>${esc(x.st.code)}</small></td><td>${esc(x.st.level)}</td><td>${x.why}</td></tr>`).join('')}</table>${X.length>100?'<p class="note">يظهر أول 100 فقط.</p>':''}`:''}
-   <div id="aupg" class="note"></div><button class="btn no" id="aux" ${P.length?'':'disabled'}>تنفيذ التوزيع (${P.length} طالب)</button><button class="btn alt" id="auc">إلغاء</button></div>`;
-   $('#auc').onclick=()=>{box.innerHTML='';bt.disabled=false};
-   $('#aux').onclick=async()=>{if(!confirm('تسكين '+P.length+' طالب في الجروبات المقترحة؟'))return;const g=$('#aux');g.disabled=true;$('#auc').disabled=true;let dn=0;const pg=l=>$('#aupg').innerHTML=l+' '+dn+' / '+P.length+' <progress max="'+P.length+'" value="'+dn+'" style="width:100%"></progress>';
-    try{pg('جارٍ التسكين');for(const c of ck(P,300)){await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.st.code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');dn+=c.length;pg('جارٍ التسكين')}
-     for(const c of ck(P,100))await api(`students?code=in.${enc(c.map(x=>x.st.code))}`,'PATCH',{is_new:false});
-     for(const c of ck(P,300))await notify(c.map(x=>x.st.code),'تم تحديد جدولك','تم تسكينك في جروب جديد');
-     alert('تم تسكين '+P.length+' طالب'+(X.length?'، وبقي '+X.length+' بلا مكان':''));box.innerHTML='';bt.disabled=false;await run()}catch(er){alert('توقف التوزيع: '+er.message+'\nما تم تسكينه محفوظ، ويمكنك إعادة المحاولة للباقي.');g.disabled=false;$('#auc').disabled=false}}
+   const SM=Object.fromEntries(sl.map(x=>[x.id,x])),off=new Set(),ruled=un.filter(r=>allowedDays(r,DR)).length;let over=false,plan=[],ps=100;
+   const calc=()=>{const M={...N};plan=un.map(st=>{let why='',t=null,ov=false;const al=allowedDays(st,DR);
+     if(!L(st.level))why='ليفل الطالب غير محدد';
+     else{const lvl=sl.filter(x=>L(x.level)==L(st.level));if(!lvl.length)why='لا يوجد جروب بنفس الليفل';
+      else{const ok=al?lvl.filter(x=>al.has(x.day)):lvl;if(!ok.length)why='قواعد الأيام لا تسمح بأي جروب بنفس الليفل';
+       else{let pool=ok.filter(x=>(M[x.id]||0)<capOf(x));if(!pool.length&&over)pool=ok;
+        if(!pool.length)why='كل الجروبات المناسبة ممتلئة (يمكن للأدمن السماح بالتجاوز)';
+        else{const D={};pool.forEach(x=>{const d=D[x.day]=D[x.day]||{n:0,c:0};d.n+=M[x.id]||0;d.c+=capOf(x)});const dl=x=>D[x.day].n/D[x.day].c;
+         t=pool.slice().sort((p,q)=>dl(p)-dl(q)||(M[p.id]||0)/capOf(p)-(M[q.id]||0)/capOf(q)||fmt(p.start_time).localeCompare(fmt(q.start_time)))[0];ov=(M[t.id]||0)>=capOf(t);M[t.id]=(M[t.id]||0)+1}}}}
+     return{st,t,why,ov}})};
+   const sel=()=>plan.filter(x=>x.t&&!off.has(x.st.code)),grp=()=>{const add={};sel().forEach(x=>add[x.t.id]=(add[x.t.id]||0)+1);return add};
+   const gtab=()=>{const add=grp(),ids=Object.keys(add).sort((a,c)=>DAYS.indexOf(SM[a].day)-DAYS.indexOf(SM[c].day)||fmt(SM[a].start_time).localeCompare(fmt(SM[c].start_time)));
+    return`<table class="table"><tr><th>الجروب المقترح</th><th>العدد الحالي</th><th>سيُضاف</th><th>العدد بعد الإضافة</th></tr>${ids.map(id=>{const g=SM[id],a=N[id]||0,af=a+add[id],o=af>capOf(g);return`<tr><td>${slotLb(g)}</td><td>${a} / ${capOf(g)}</td><td>+${add[id]}</td><td class="${o?'bad':''}"><b>${af} / ${capOf(g)}</b>${o?' • تجاوز الحد':''}</td></tr>`}).join('')||'<tr><td colspan="4">لا يوجد تسكين محدد</td></tr>'}</table>`};
+   const bar=()=>{const add=grp(),n=sel().length,o=Object.keys(add).filter(id=>(N[id]||0)+add[id]>capOf(SM[id])).length;return`سيُسكَّن <b>${n}</b> طالب${o?' • <b style="color:#f2cf6b">تجاوز الحد في '+o+' جروب</b>':''}`};
+   const render=()=>{const P=plan.filter(x=>x.t),X=plan.filter(x=>!x.t);
+    box.innerHTML=`<div class="card"><h3>معاينة التوزيع التلقائي</h3><p>غير موزعين: <b>${un.length}</b> — لهم مكان مقترح: <b class="ok">${P.length}</b> — لا مكان لهم: <b class="bad">${X.length}</b>${ruled?` — طُبِّقت قواعد الأيام على <b>${ruled}</b> طالب`:''}</p>
+    ${adm?`<label class="chk"><input type="checkbox" id="auo" ${over?'checked':''}> السماح بتجاوز الحد الأقصى عند عدم وجود كلاس فارغ</label>`:'<p class="note">عند امتلاء الجروبات لا يمكن تجاوز الحد الأقصى إلا للأدمن.</p>'}
+    <h3 style="margin-top:14px">الجروبات المقترحة والأعداد بعد الإضافة</h3><div class="wrap" id="augrp">${gtab()}</div>
+    <h3 style="margin-top:16px">الطلاب المقترح تسكينهم (${P.length}) — ألغِ التحديد عمّن لا تريد تسكينه</h3><button type="button" class="chip" id="auall">تحديد الكل</button><button type="button" class="chip" id="aunone">إلغاء تحديد الكل</button>
+    <div class="wrap"><table class="table"><tr><th></th><th>الطالب</th><th>الليفل</th><th>الجروب المقترح</th></tr>${P.slice(0,ps).map(x=>`<tr><td><input type="checkbox" data-pk="${esc(x.st.code)}" ${off.has(x.st.code)?'':'checked'}></td><td>${esc(x.st.name)}<br><small>${esc(x.st.code)}</small></td><td>${esc(x.st.level)}</td><td>${slotLb(x.t)}${x.ov?' <b class="bad">• تجاوز الحد</b>':''}</td></tr>`).join('')}</table></div>${P.length>ps?`<button type="button" class="btn alt" id="amo">عرض المزيد (${P.length-ps})</button>`:''}
+    ${X.length?`<h3 style="margin-top:16px">طلاب لم يُجد لهم مكان (${X.length}) — يُوزَّعون يدوياً</h3><div class="wrap"><table class="table"><tr><th>الطالب</th><th>الليفل</th><th>السبب</th></tr>${X.slice(0,100).map(x=>`<tr><td>${esc(x.st.name)}<br><small>${esc(x.st.code)}</small></td><td>${esc(x.st.level)}</td><td>${x.why}</td></tr>`).join('')}</table></div>${X.length>100?'<p class="note">يظهر أول 100 فقط.</p>':''}`:''}
+    <div style="height:84px"></div>
+    <div class="abar"><span id="abtxt">${bar()}</span><button class="btn no" id="aux" style="margin:0">تنفيذ التوزيع على المحددين</button><button class="btn alt" id="auc" style="margin:0">إلغاء</button></div></div>`};
+   const upd=()=>{$('#augrp').innerHTML=gtab();$('#abtxt').innerHTML=bar()};
+   calc();render();
+   box.onchange=e=>{const t=e.target;if(t.id=='auo'){over=t.checked;calc();render()}else if(t.dataset.pk!==undefined){t.checked?off.delete(t.dataset.pk):off.add(t.dataset.pk);upd()}};
+   box.onclick=async e=>{const t=e.target;
+    if(t.id=='auc'){box.innerHTML='';bt.disabled=false}
+    else if(t.id=='auall'){off.clear();render()}
+    else if(t.id=='aunone'){plan.forEach(x=>x.t&&off.add(x.st.code));render()}
+    else if(t.id=='amo'){ps+=100;render()}
+    else if(t.id=='aux'){const P=sel();if(!P.length)return alert('لم تحدد أي طالب للتسكين');
+     const add=grp(),ovn=Object.keys(add).filter(id=>(N[id]||0)+add[id]>capOf(SM[id])).length;if(ovn&&!adm)return alert('بعض الجروبات ستتجاوز الحد الأقصى ولا يسمح بذلك إلا للأدمن');
+     if(!confirm('تسكين '+P.length+' طالب'+(ovn?'\nتنبيه: سيتجاوز '+ovn+' جروب الحد الأقصى':'')+'؟'))return;
+     const g=$('#aux');g.disabled=true;$('#auc').disabled=true;let dn=0;const pg=l=>$('#abtxt').innerHTML=l+' '+dn+' / '+P.length+' <progress max="'+P.length+'" value="'+dn+'"></progress>';
+     try{pg('جارٍ التسكين');for(const c of ck(P,300)){await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.st.code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');dn+=c.length;pg('جارٍ التسكين')}
+      for(const c of ck(P,100))await api(`students?code=in.${enc(c.map(x=>x.st.code))}`,'PATCH',{is_new:false});
+      for(const c of ck(P,300))await notify(c.map(x=>x.st.code),'تم تحديد جدولك','تم تسكينك في جروب جديد');
+      alert('تم تسكين '+P.length+' طالب');box.innerHTML='';bt.disabled=false;await run()}catch(er){alert('توقف التوزيع: '+er.message+'\nما تم تسكينه محفوظ، ويمكنك إعادة المحاولة للباقي.');g.disabled=false;$('#auc').disabled=false;$('#abtxt').innerHTML=bar()}}};
   }catch(er){alert(er.message);box.innerHTML='';bt.disabled=false}};
  const draw=()=>{const k=C.filter(c=>on.has(c[0]));$('#rt').innerHTML=k.length?'<table class="table"><tr><th>#</th>'+k.map(c=>`<th>${c[1]}</th>`).join('')+'<th class="noprint"></th></tr>'+rows.map((r,i)=>`<tr><td>${i+1}</td>`+k.map(c=>`<td>${esc(r[c[0]])}</td>`).join('')+`<td class="noprint"><button type="button" class="chip" data-ed="${esc(r.code)}">تعديل</button></td></tr>`).join('')+'</table>':'<div class="msg">اختر عموداً واحداً على الأقل</div>';
   $('#rt').querySelectorAll('[data-ed]').forEach(x=>x.onclick=()=>studentEditor(x.dataset.ed,run))};
@@ -477,7 +498,6 @@ async function dayRulesTab(b){
     if(!confirm('نقل '+P.length+' طالب إلى أيامهم المتاحة'+(over.length?'\nتنبيه: سيتجاوز '+over.length+' جروب الحد':'')+'؟'))return;
     try{for(const c of chunk(P,300))await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.v.student_code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');const G={};P.forEach(x=>(G[x.v.slot_id]=G[x.v.slot_id]||[]).push(x.v.student_code));for(const id in G)for(const c of chunk(G[id],100))await api(`enrollments?slot_id=eq.${id}&student_code=in.${encIn(c)}`,'DELETE');
      for(const c of chunk(P,300))await notify(c.map(x=>x.v.student_code),'تم تعديل جدولك','تم نقلك إلى يوم مناسب لمستواك الدراسي');alert('تم نقل '+P.length+' طالب');$('#vc').click()}catch(er){alert(er.message)}}}}}
-
 
 (function() {
     // 1. منع القائمة المنسدلة (Right-Click)
