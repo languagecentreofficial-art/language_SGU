@@ -447,3 +447,60 @@ async function dayRulesTab(b){
     if(!confirm('نقل '+P.length+' طالب إلى أيامهم المتاحة'+(over.length?'\nتنبيه: سيتجاوز '+over.length+' جروب الحد':'')+'؟'))return;
     try{for(const c of chunk(P,300))await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x.v.student_code,slot_id:x.t.id})),'resolution=merge-duplicates,return=minimal');const G={};P.forEach(x=>(G[x.v.slot_id]=G[x.v.slot_id]||[]).push(x.v.student_code));for(const id in G)for(const c of chunk(G[id],100))await api(`enrollments?slot_id=eq.${id}&student_code=in.${encIn(c)}`,'DELETE');
      for(const c of chunk(P,300))await notify(c.map(x=>x.v.student_code),'تم تعديل جدولك','تم نقلك إلى يوم مناسب لمستواك الدراسي');alert('تم نقل '+P.length+' طالب');$('#vc').click()}catch(er){alert(er.message)}}}}}
+
+
+(function() {
+    // 1. منع القائمة المنسدلة (Right-Click)
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    }, false);
+
+    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
+    document.addEventListener('keydown', function(e) {
+        // منع F12
+        if (e.key === "F12" || e.keyCode === 123) {
+            e.preventDefault();
+            return false;
+        }
+
+        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
+        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
+            e.preventDefault();
+            return false;
+        }
+
+        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
+        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
+            e.preventDefault();
+            return false;
+        }
+    }, false);
+
+    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
+    let devtoolsOpen = false;
+    const threshold = 160;
+
+    setInterval(function() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        
+        if (widthThreshold || heightThreshold) {
+            if (!devtoolsOpen) {
+                devtoolsOpen = true;
+                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
+            }
+        } else {
+            devtoolsOpen = false;
+        }
+    }, 500);
+
+    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
+})();
