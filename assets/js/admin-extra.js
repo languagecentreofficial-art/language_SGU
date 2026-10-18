@@ -27,21 +27,22 @@ function askConflicts(conf,blocks,SM){return new Promise(res=>{
  document.body.append(m);m.querySelector('#cno').onclick=()=>{m.remove();res(null)};
  m.querySelector('#cgo').onclick=()=>{const ch={};m.querySelectorAll('select[data-c]').forEach(s=>ch[s.dataset.c]={t:s.value[0],v:+s.value.slice(1)});m.remove();res(ch)}})}
 async function importTab(b){
- b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><p><b>تنبيه:</b> عند الرفع تُحذف كل جروبات الأيام الموجودة في الملف وتُنشأ من جديد. الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط دون المساس بكلمة المرور. الطالب المسجّل أصلاً في جروب آخر تُسأل عن نقله، ولا يُنقل إلا لجروب بنفس ليفله.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
+ b.innerHTML=`<div class="card"><h3>رفع جدول حضور (إكسيل)</h3><label>طريقة الاستبدال</label><div><label class="chk"><input type="radio" name="rm" value="cls" checked> حذف الكلاسات الموجودة في الملف فقط (نفس اليوم والكلاس) وإعادة إنشائها بطلاب الملف</label><br><label class="chk"><input type="radio" name="rm" value="day"> حذف كل جروبات الأيام الموجودة في الملف واستبدالها بالملف</label></div><p><b>تنبيه:</b> الجروبات المحذوفة تُنشأ من جديد من الملف. الطالب الجديد يُسجَّل بكلمة مرور = كوده، والموجود تُحدَّث بياناته الأكاديمية فقط دون المساس بكلمة المرور. الطالب المسجّل أصلاً في جروب آخر تُسأل عن نقله، ولا يُنقل إلا لجروب بنفس ليفله.</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><div id="pv"></div><button class="btn alt" id="go" disabled>استيراد</button> <button class="btn" id="tp">تحميل القالب</button></div><div id="rp"></div>`;
  $('#tp').onclick=downloadTemplate;let blocks=[];
  $('#f').onchange=async e=>{const wb=XLSX.read(await e.target.files[0].arrayBuffer());blocks=wb.SheetNames.flatMap(n=>parseRows(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null})));
   $('#pv').innerHTML=blocks.map(x=>`<div class="msg">${x.day} ${x.start}-${x.end} | ${esc(x.cls)} | ${esc(x.level)} | ${x.rows.length} طالب</div>`).join('')||'<div class="msg">لم يتم التعرف على أي جدول، استخدم القالب</div>';$('#go').disabled=!blocks.length};
  $('#go').onclick=async()=>{try{
-  const days=[...new Set(blocks.map(x=>x.day))],old=[];for(const d of days)old.push(...await api(`slots?day=eq.${q(d)}&select=*`));
-  const [st,sl,en]=await Promise.all([all('students?select=code,is_new,level'),all('slots?select=id,day,start_time,end_time,place,level'),all('enrollments?select=slot_id,student_code')]);
+  const days=[...new Set(blocks.map(x=>x.day))],mode=document.querySelector('input[name=rm]:checked').value,mn=t=>{const [h,m]=String(t).split(':');return +h*60+ +m};
+  const [st,sl,en]=await Promise.all([all('students?select=code,is_new,level'),all('slots?select=id,day,start_time,end_time,place,level,lecturer_code,capacity'),all('enrollments?select=slot_id,student_code')]);
   const SM=Object.fromEntries(sl.map(s=>[s.id,s])),SD=Object.fromEntries(st.map(s=>[s.code,s])),cur={},app={};
-  en.forEach(e=>{const s=SM[e.slot_id];if(s&&!days.includes(s.day))(cur[e.student_code]=cur[e.student_code]||[]).push(s.id)});
+  const old=mode=='day'?sl.filter(s=>days.includes(s.day)):sl.filter(s=>blocks.some(x=>s.day==x.day&&nzp(s.place)==nzp(x.cls)&&mn(fmt(s.start_time))<mn(x.end)&&mn(fmt(s.end_time))>mn(x.start))),delIds=new Set(old.map(s=>s.id));
+  en.forEach(e=>{const s=SM[e.slot_id];if(s&&!delIds.has(s.id))(cur[e.student_code]=cur[e.student_code]||[]).push(s.id)});
   blocks.forEach((x,i)=>x.rows.forEach(r=>(app[r.code]=app[r.code]||new Set()).add(i)));
   const conf=[];Object.keys(app).forEach(c=>{const bs=[...app[c]],cs=cur[c]||[];if(bs.length>1||cs.length){const r0=blocks[bs[0]].rows.find(r=>r.code==c);conf.push({c,name:r0.name,lvl:SD[c]?.level||r0.level||blocks[bs[0]].level,bs,cs})}});
   let choice={};if(conf.length){choice=await askConflicts(conf,blocks,SM);if(!choice)return}
-  if(!confirm(`سيتم حذف كل الجروبات الموجودة في الأيام: ${days.join('، ')} (${old.length} جروب) وإعادة إنشائها من الملف.\nيُعاد ربط المحاضرين عند تطابق اليوم والوقت والكلاس، وتبقى سجلات الغياب القديمة محفوظة. متابعة؟`))return;
+  if(!confirm((mode=='day'?`سيتم حذف كل الجروبات الموجودة في الأيام: ${days.join('، ')} (${old.length} جروب)`:`سيتم حذف الجروبات الموجودة في الملف فقط (${old.length} جروب: نفس اليوم والكلاس) وتبقى باقي جروبات اليوم كما هي`)+` وإعادة إنشائها من الملف.\nيُعاد ربط المحاضرين عند تطابق اليوم والوقت والكلاس، وتبقى سجلات الغياب القديمة محفوظة. متابعة؟`))return;
   $('#go').disabled=true;const rep=[],mv=new Set(),lm={};old.forEach(o=>{if(o.lecturer_code)lm[[o.day,fmt(o.start_time),fmt(o.end_time),nzp(o.place)].join('|')]=o.lecturer_code});
-  for(const d of days)await api('slots?day=eq.'+q(d),'DELETE');
+  if(mode=='day'){for(const d of days)await api('slots?day=eq.'+q(d),'DELETE')}else{const ids=old.map(s=>s.id);for(let i=0;i<ids.length;i+=100)await api('slots?id=in.('+ids.slice(i,i+100).join(',')+')','DELETE')}
   const isn=Object.fromEntries(st.map(r=>[r.code,r.is_new])),mk={};
   for(let bi=0;bi<blocks.length;bi++){const x=blocks[bi],place=x.cls+(x.building?' - '+x.building:''),key=[x.day,x.start,x.end,nzp(x.cls)].join('|');
    let s=mk[key],made=false,lcode=lm[key]||null;const lc=x.rows.find(r=>r.lec)?.lec;if(lc){const [l]=await api('staff?code=eq.'+q(lc)+'&select=code');if(l)lcode=l.code}
@@ -66,60 +67,3 @@ async function reportTab(b){
  document.querySelectorAll('.ck').forEach(c=>c.onchange=draw);draw();
  $('#pr').onclick=()=>print();
  $('#xl').onclick=()=>{const k=draw();const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.map(r=>Object.fromEntries(k.map(c=>[c[1],r[c[0]]])))),'Report');XLSX.writeFile(wb,'report.xlsx')}}
-
-
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();

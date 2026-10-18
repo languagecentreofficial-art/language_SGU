@@ -4,23 +4,39 @@ const S=v=>v==null?null:String(v).trim()||null;
 const tm=v=>{if(v instanceof Date)return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');if(typeof v=='number'){let m=Math.round((v-Math.floor(v))*1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}return t24(String(v))};
 const nA=x=>String(x).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim();
 const dayOf=v=>{const s=String(v).trim().toLowerCase(),k=s.length>=3&&Object.keys(EN2AR).find(k=>k.startsWith(s.slice(0,3)));if(k)return EN2AR[k];return DAYS.find(d=>nA(d)==nA(s))||String(v).trim()};
-const upProg=(d,t,l)=>{const e=document.getElementById('upp');if(e)e.innerHTML=`<div class="note"><b>${l||''}</b> ${t?d+' / '+t+' ('+Math.round(d/t*100)+'%)':''}</div><progress style="width:100%;height:18px" ${t?`max="${t}" value="${d}"`:''}></progress>`};
-const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button><div id="upp" style="margin-top:12px"></div></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');const g=$('#go');g.disabled=true;upProg(0,0,'جارٍ قراءة الملف...');try{const rw=await rd(f);upProg(0,0,'جارٍ التنفيذ... لا تغلق الصفحة');const m=await run(rw);upProg(1,1,'اكتمل ✔');alert(m)}catch(e){upProg(0,0,'');$('#upp').innerHTML='<div class="msg">توقف الرفع: '+esc(e.message)+'</div>';alert('خطأ: '+e.message)}g.disabled=false}};
+const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');try{alert(await run(await rd(f)))}catch(e){alert('خطأ: '+e.message)}}};
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
 // ===== رفع الطلاب فقط =====
-const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, StudyLevel, Level, Section, Place (StudyLevel = المستوى الدراسي). الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد.',
- ()=>dl([['Code','Name','Phone','Faculty','StudyLevel','Level','Section','Place'],['261541','اسم الطالب','01000000000','Computer Science','الفرقة الأولى','B2','Section A1','Class 0022']],'students_template.xlsx'),
- async rows=>{const old=Object.fromEntries((await all('students?select=code,name,phone,college,study_level,level,section,place,is_new')).map(s=>[s.code,s]));
-  const out=rows.filter(r=>S(r.Code)).map(r=>{const c=S(r.Code),o=old[c]||{};return{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,study_level:S(r.StudyLevel??r['Study Level']??r['المستوى الدراسي']??r['المستوى_الدراسي'])||o.study_level||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}});
-  const U=[...new Map(out.map(r=>[r.code,r])).values()],ck=(x,n)=>Array.from({length:Math.ceil(x.length/n)},(_,k)=>x.slice(k*n,k*n+n)),
-   nw=U.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=U.filter(r=>old[r.code]).map(({is_new,...r})=>r),
-   F=['name','phone','college','study_level','level','section','place'],chg=ex.filter(r=>F.some(k=>(r[k]||null)!==(old[r.code][k]||null)));
-  /* تشفير كلمة المرور (bcrypt) يتم لكل صف جديد، لذلك الجدد دفعات صغيرة، والموجودون يُحدَّث منهم المتغيّر فقط بدون upsert */
-  const TT=nw.length+chg.length;let dn=0;upProg(0,TT,'جارٍ الحفظ');
-  for(const c of ck(nw,30)){await api('students','POST',c,'return=minimal');dn+=c.length;upProg(dn,TT,'إضافة الطلاب الجدد')}
-  for(const c of ck(chg,10)){await Promise.all(c.map(({code,...d})=>api('students?code=eq.'+encodeURIComponent(code),'PATCH',d)));dn+=c.length;upProg(dn,TT,'تحديث بيانات الموجودين')}
-  return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (تم تحديث ${chg.length} منهم، والباقي بلا تغيير، وكلمة المرور لم تتغير)`});
+const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place، والاختيارية: Day, From, To لتحديد الجروب بدقة عندما يتكرر الكلاس في أكثر من يوم. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد. عند وجود Place يُنقل الطالب فوراً إلى جروب هذا الكلاس في الجداول (بدون أي شروط ليفل أو سعة) ويُحذف من جروبه القديم.',
+ ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place','Day','From','To'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022','Monday','9:00 AM','11:00 AM']],'students_template.xlsx'),
+ async rows=>{const [oldL,sl,en]=await Promise.all([all('students?select=code,name,phone,college,level,section,place,is_new'),all('slots?select=id,day,start_time,end_time,place,level'),all('enrollments?select=slot_id,student_code')]);
+  const old=Object.fromEntries(oldL.map(s=>[s.code,s])),R=rows.filter(r=>S(r.Code));
+  const out=[...new Map(R.map(r=>{const c=S(r.Code),o=old[c]||{};return[c,{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}]})).values()];
+  const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');
+  // ===== مزامنة التسكين (enrollments) مع الكلاس المرفوع =====
+  const SM=Object.fromEntries(sl.map(s=>[s.id,s])),cur={};en.forEach(e=>(cur[e.student_code]=cur[e.student_code]||[]).push(e.slot_id));
+  const del=[],add=[],bad=[],amb=[];let same=0;
+  for(const r of R){const pl=S(r.Place);if(!pl)continue;const c=S(r.Code),K=nzp(pl);let cand=sl.filter(s=>nzp(s.place)==K),dy=null,fr=null;
+   try{if(S(r.Day))dy=dayOf(r.Day);if(r.From!=null&&r.From!=='')fr=tm(r.From)}catch(e){bad.push(c+': يوم/وقت غير مفهوم');continue}
+   if(dy)cand=cand.filter(s=>s.day==dy);if(fr)cand=cand.filter(s=>fmt(s.start_time)==fr);
+   if(!cand.length){bad.push(`${c}: لا يوجد جروب للكلاس ${pl}${dy?' في يوم '+dy:''}${fr?' الساعة '+fr:''}`);continue}
+   const cs=(cur[c]||[]).map(id=>SM[id]).filter(Boolean);
+   if(cand.some(s=>cs.some(o=>o.id==s.id))){same++;continue}
+   const sc=t=>{let m=3,oo=null;for(const o of cs){const v=o.day==t.day?(fmt(o.start_time)==fmt(t.start_time)?0:1):2;if(v<m){m=v;oo=o}}return{t,m,o:oo}};
+   const L=cand.map(sc).sort((x,y)=>x.m-y.m||fmt(x.t.start_time).localeCompare(fmt(y.t.start_time))),h=L[0];
+   if(L.filter(x=>x.m==h.m).length>1)amb.push(`${c}: اختير ${h.t.day} ${fmt(h.t.start_time)} كلاس ${pl}`);
+   const o=h.o&&nzp(h.o.place)!=K&&(cs.length==1||h.o.day==h.t.day)?h.o:null;
+   if(o){del.push({c,id:o.id});cur[c]=cur[c].filter(i=>i!=o.id)}
+   add.push({student_code:c,slot_id:h.t.id});(cur[c]=cur[c]||[]).push(h.t.id)}
+  const grp={};del.forEach(d=>(grp[d.id]=grp[d.id]||[]).push(d.c));
+  for(const id in grp)for(let i=0;i<grp[id].length;i+=80)await api(`enrollments?slot_id=eq.${id}&student_code=in.(${grp[id].slice(i,i+80).map(q).join(',')})`,'DELETE');
+  const AD=[...new Map(add.map(a=>[a.student_code+'|'+a.slot_id,a])).values()];
+  for(let i=0;i<AD.length;i+=500)await api('enrollments?on_conflict=student_code,slot_id','POST',AD.slice(i,i+500),'resolution=merge-duplicates,return=minimal');
+  const mvC=[...new Set(AD.map(a=>a.student_code))],nwC=mvC.filter(c=>!old[c]||old[c].is_new);
+  for(let i=0;i<nwC.length;i+=80)await api(`students?code=in.(${nwC.slice(i,i+80).map(q).join(',')})`,'PATCH',{is_new:false});
+  if(mvC.length)await notify(mvC,'تحديث الجدول','تم تحديث كلاسك وجدولك، راجع جدولك');
+  return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)\nتم تحديث التسكين في الجداول: ${mvC.length} طالب (نُقلوا: ${del.length})\nكانوا في الكلاس نفسه أصلاً: ${same}${amb.length?'\nاختيار تلقائي عند تعدد الجروبات ('+amb.length+') — يمكن تحديد Day/From/To في الملف لتفادي ذلك:\n'+amb.slice(0,15).join('\n')+(amb.length>15?'\n...':''):''}${bad.length?'\nلم يُسكَّنوا ('+bad.length+'):\n'+bad.slice(0,20).join('\n')+(bad.length>20?'\n...':''):''}`});
 
 // ===== رفع المحاضرين والتوقيتات =====
 const LA={code:['code','كود','الكود','lecturercode'],name:['name','الاسم','اسم'],phone:['phone','mobile','tel','الهاتف','رقمالهاتف'],role:['role','الصلاحية'],day:['day','اليوم'],from:['from','start','starttime','من'],to:['to','end','endtime','الى','إلى'],cls:['class','classroom','room','place','كلاس','الكلاس'],level:['level','englishlevel','الليفل']};
@@ -113,58 +129,3 @@ async function permTab(b){
   $('#sa').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.add('on'));$('#sn').onclick=()=>document.querySelectorAll('#tc .chip').forEach(c=>c.classList.remove('on'));
   $('#sv').onclick=async()=>{const roles=[...document.querySelectorAll('#rc .chip.on')].map(x=>x.dataset.k),p={};document.querySelectorAll('#tc .chip.on').forEach(x=>p[x.dataset.k]=true);if(!roles.length)return alert('اختر صفة واحدة على الأقل');
    await api('staff?code=eq.'+a.code,'PATCH',{role:PRI.find(x=>roles.includes(x)),roles,perms:p});a.roles=roles;a.role=PRI.find(x=>roles.includes(x));a.perms=p;alert('تم حفظ الصلاحيات')}}}
-(function() {
-    // 1. منع القائمة المنسدلة (Right-Click)
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    }, false);
-
-    // 2. منع اختصارات لوحة المفاتيح المتقدمة (Windows & Mac)
-    document.addEventListener('keydown', function(e) {
-        // منع F12
-        if (e.key === "F12" || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Windows: Ctrl + Shift + (I, J, C) و Ctrl + U
-        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.ctrlKey && ['U', 'u', 'S', 's'].includes(e.key)) { // منع Ctrl+U (عرض المصدر) و Ctrl+S (حفظ الصفحة)
-            e.preventDefault();
-            return false;
-        }
-
-        // منع اختصارات Mac: Cmd + Option + (I, J, C) و Cmd + U و Cmd + S
-        if (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-        if (e.metaKey && ['U', 'u', 'S', 's'].includes(e.key)) {
-            e.preventDefault();
-            return false;
-        }
-    }, false);
-
-    // 3. طريقة متطورة لاكتشاف فتح الـ Console عبر الـ Debugger
-    let devtoolsOpen = false;
-    const threshold = 160;
-
-    setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                window.location.reload(); // إعادة تحميل الصفحة أو مسح المحتوى
-            }
-        } else {
-            devtoolsOpen = false;
-        }
-    }, 500);
-
-    // تعطيل الـ debugger التقليدي إذا تسبب في إزعاج المستخدم العادي، وتم الاستعاضة عنه بفحص أبعاد النافذة بدقة أعلى
-})();
