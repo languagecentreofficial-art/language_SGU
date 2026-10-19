@@ -1,6 +1,6 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light only"><meta name="theme-color" content="#17306b"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/style.css?v=38"><title>تسجيل الدخول</title><style>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light only"><meta name="theme-color" content="#17306b"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="assets/css/style.css?v=39"><title>تسجيل الدخول</title><style>
 /* ثبات شاشة الدخول على iOS: ارتفاع ثابت (svh) + منع تبدّل الخط + إزالة تمرير مزدوج */
-body.auth{min-height:100vh;min-height:100svh;overflow:visible!important;opacity:0;animation:ctshow .01s 1.2s forwards}
+body.auth{min-height:100vh;min-height:100svh;opacity:0;animation:ctshow .01s 1.2s forwards}
 body.auth.rdy{opacity:1;animation:none;transition:opacity .12s}
 html{overscroll-behavior:none}
 @keyframes ctshow{to{opacity:1}}
@@ -10,6 +10,6 @@ html{overscroll-behavior:none}
 <script src="assets/js/app.js?v=38"></script><script>shell(null);
 const home={student:'student.html',lecturer:'lecturer.html',admin:'admin.html',assistant:'admin.html',affairs:'admin.html'};
 function choose(u){const rs=u.roles||[u.role];if(rs.length<2){localStorage.setItem('u',JSON.stringify(u));location=home[u.role];return}document.querySelector('.login').innerHTML='<h3>اختر الدخول بصفة</h3>'+rs.map(r=>`<button class="btn" style="width:100%;margin:6px 0" data-r="${r}">${ROLE[r]}</button>`).join('');document.querySelectorAll('[data-r]').forEach(k=>k.onclick=()=>{u.role=k.dataset.r;localStorage.setItem('u',JSON.stringify(u));location=home[u.role]})}
-if(me())location=home[me().role];
+(function(){const u=me();if(!u)return;let L=[];try{const t=Date.now();L=JSON.parse(sessionStorage.getItem('rdl')||'[]').filter(x=>t-x<8000);L.push(t);sessionStorage.setItem('rdl',JSON.stringify(L))}catch(e){}if(L.length>3||!home[u.role]){localStorage.removeItem('u');try{sessionStorage.removeItem('rdl')}catch(e){}return}location.replace(home[u.role])})();addEventListener('pageshow',e=>{if(e.persisted)document.body.classList.add('rdy')});
 (function(){if(me())return;const go=()=>document.body.classList.add('rdy');Promise.race([document.fonts?document.fonts.ready:0,new Promise(r=>setTimeout(r,800))]).then(go,go)})();
 $('#go').onclick=async()=>{try{const u=await rpc('login',{p_code:$('#c').value.trim(),p_pass:$('#p').value});if(!u)return alert('الكود أو كلمة المرور غير صحيحة');choose(u)}catch(e){alert('تعذر الاتصال: '+e.message)}}</script></body></html>
