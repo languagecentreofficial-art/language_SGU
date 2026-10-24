@@ -7,7 +7,7 @@ const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء',
 const GW=SB.replace('/rest/v1/','/functions/v1/gw');
 async function gw(op,d){
   const u=JSON.parse(localStorage.getItem('u')||'null');
-  const r=await fetch(GW,{method:'POST',headers:{'Content-Type':'application/json',...(u&&u.tk?{Authorization:'Bearer '+u.tk}:{})},body:JSON.stringify({op,role:u&&u.role,...d})});
+  const r=await fetch(GW,{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+KEY,...(u&&u.tk?{'x-st':u.tk}:{})},body:JSON.stringify({op,role:u&&u.role,...d})});
   const t=await r.text();let j=null;try{j=t?JSON.parse(t):null}catch(e){}
   if(!r.ok){
     if(r.status==401&&j&&j.code=='SESSION'){localStorage.removeItem('u');if(!/index\.html$|\/$/.test(location.pathname))location='index.html';throw new Error(j.message)}
