@@ -70,7 +70,7 @@ async function approveReq(x,msg){
 async function tryAutoApprove(x){try{const r=await gw('auto_approve',{id:x.id});return !!(r&&r.ok)}catch(e){return false}}
 // قبول كل الطلبات المعلّقة المؤهلة (slotIds: للمحاضر جروباته فقط، وبدونها للأدمن كل الجروبات)
 async function autoApprovePending(slotIds){
-  let r=await api('change_requests?status=eq.pending&select=*,student:students(level)&order=id');
+  let r=await api('change_requests?status=eq.pending'+(slotIds&&slotIds.length?'&to_slot=in.('+slotIds.map(Number).join(',')+')':'')+'&select=*,student:students(level)&order=id');
   if(slotIds){const S=slotIds.map(Number);r=r.filter(x=>S.includes(+x.to_slot))}
   const ids=[...new Set(r.map(x=>x.to_slot))],done=[];if(!ids.length)return{ok:0,skip:0,done};
   const sl=Object.fromEntries((await api('slots?id=in.('+ids.join(',')+')&select=id,level,capacity')).map(g=>[g.id,g])),N={};

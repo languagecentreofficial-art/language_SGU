@@ -3,11 +3,21 @@ const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 // روابط المبرمج - عدّلها
 const SOCIAL={whatsapp:'https://wa.me/20XXXXXXXXXX',instagram:'https://instagram.com/XXXX',facebook:'https://facebook.com/XXXX'};
 const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+// كل الاتصالات تمر عبر دوال قاعدة البيانات؛ الـ anon key وحده لا يفتح أي جدول.
+const tok=()=>((JSON.parse(localStorage.getItem('u')||'null')||{}).token)||'';
+async function call(fn,args){
+  const r=await fetch(SB+'rpc/'+fn,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{})});
+  const t=await r.text();
+  if(!r.ok){let m=t;try{m=JSON.parse(t).message||t}catch(e){}
+    if(/unauthorized/.test(m)&&tok()){localStorage.removeItem('u');if(!/index\.html$/.test(location.pathname))location='index.html'}
+    throw new Error(m)}
+  return t?JSON.parse(t):null}
+// نفس صيغة PostgREST القديمة، لكن تُرسل للبوابة gw التي تفحص الجلسة والدور والصفوف والأعمدة
 async function api(path,method='GET',body,prefer){
-  prefer=prefer||(method=='POST'?'return=representation':'return=minimal');
-  const r=await fetch(SB+path,{method,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',Prefer:prefer},body:body?JSON.stringify(body):undefined});
-  const t=await r.text(); if(!r.ok) throw new Error(t); return t?JSON.parse(t):null}
-const rpc=(f,a)=>api('rpc/'+f,'POST',a);
+  const i=path.indexOf('?'),tb=i<0?path:path.slice(0,i),qs=i<0?'':path.slice(i+1);
+  return call('gw',{p_token:tok(),p_method:method,p_table:tb,p_pairs:[...new URLSearchParams(qs)],p_body:body??null,p_prefer:prefer||(method=='POST'?'return=representation':'return=minimal')})}
+const rpc=(f,a)=>call(f,{...(a||{}),p_token:tok()});
+const notifyAdmins=(title,body,lec)=>rpc('app_notify_admins',{p_title:title,p_body:body,p_lecturer:lec||null});
 const me=()=>JSON.parse(localStorage.getItem('u')||'null');
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -17,9 +27,9 @@ const P={user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"
 const ic=(n,z=20)=>`<svg width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]||P.dot}</svg>`;
 const MAP={'بياناتي':'user','جدولي':'cal','غيابي':'check','درجاتي':'grad','شكوى':'chat','طلب تغيير':'swap','الإعلانات':'mega','تسجيل الغياب':'clip','ملفي':'user','جدول محاضراتي':'cal','طلبات التغيير':'swap','الرئيسية':'home','الطلبات':'inbox','الشكاوى':'chat','إعلان':'mega','طالب جديد':'plus','جروب جديد':'cal','حسابات':'key','رفع إكسيل':'up','التقارير':'chart','الدرجات':'grad','الغياب والإنذارات':'warn','الجداول ونقل الطلاب':'table','تعديل الغياب':'pen','رفع طلاب':'users','بيانات الطلاب':'users','المحاضرون':'board','توزيع المحاضرين':'board','الصلاحيات':'shield','معاينة الجداول':'table','إعادة توزيع الليفل المخالف':'swap','الطلاب الجدد':'users','قواعد الأيام':'cal','الطلاب في أكثر من كلاس':'users','الحجب وشؤون الطلاب':'shield','شروط النجاح والترقية':'grad'};
 const DESC={'بياناتي':'الملف الشخصي وكلمة المرور','جدولي':'اليوم والمكان والمحاضر والتوقيت','غيابي':'حضورك الأسبوعي والشهري والترم','درجاتي':'الكويزات والاختبارات والتقييمات','شكوى':'أرسل شكوى أو تعارضاً','طلب تغيير':'طلب نقل إلى جروب آخر','الإعلانات':'جداول الاختبارات والتنبيهات','تسجيل الغياب':'سجّل حضور طلاب جروبات اليوم','ملفي':'الهاتف وكلمة المرور','جدول محاضراتي':'جروباتك وكلاساتك وليفلاتك في كل يوم','طلبات التغيير':'طلبات نقل الطلاب إلى جروباتك'};
-function guard(roles){const u=me();if(!u||!roles.includes(u.role)){location='index.html';throw 0}return u}
-function logout(){localStorage.removeItem('u');location='index.html'}
-async function count(t,c,f=''){const r=await fetch(`${SB}${t}?select=${c}${f}`,{method:'HEAD',headers:{apikey:KEY,Authorization:'Bearer '+KEY,Prefer:'count=exact'}});return +(r.headers.get('content-range')||'/0').split('/')[1]}
+function guard(roles){const u=me();if(!u||!u.token||!roles.includes(u.role)){localStorage.removeItem('u');location='index.html';throw 0}return u}
+function logout(){const t=tok();localStorage.removeItem('u');(t?call('app_logout',{p_token:t}).catch(()=>{}):Promise.resolve()).then(()=>location='index.html')}
+async function count(t,c,f=''){return +(await call('gw',{p_token:tok(),p_method:'COUNT',p_table:t,p_pairs:[...new URLSearchParams('select='+c+f)],p_body:null,p_prefer:''}))}
 function shell(u){
   const side=u&&['admin','assistant','affairs'].includes(u.role);
   document.body.insertAdjacentHTML('afterbegin',`<header>${side?`<button class="menu" aria-label="القائمة" onclick="document.body.classList.toggle('open')">${ic('menu',22)}</button>`:''}<img src="assets/logo.png" alt="" onerror="this.style.visibility='hidden'"><h1>جامعة الصالحية الجديدة<small>كورس اللغة الإنجليزية</small></h1>${u?`<div class="who"><b>${esc(u.name)}</b><small>${ROLE[u.role]} · ${esc(u.code)}</small></div><button class="bell" id="bell" aria-label="الإشعارات">${ic('bell')}<b>0</b></button><button class="out" onclick="logout()" aria-label="خروج">${ic('out')}</button>`:''}</header>`);
@@ -42,7 +52,7 @@ function tabs(defs,box){
 async function notify(codes,title,body){if(codes.length)await api('notifications','POST',codes.map(c=>({target_code:c,title,body})),'return=minimal')}
 async function changePassForm(box,u){
   box.insertAdjacentHTML('beforeend',`<div class="card"><h3>تغيير كلمة المرور</h3><label>الحالية</label><input type="password" id="o"><label>الجديدة</label><input type="password" id="n"><button class="btn" id="cp">حفظ كلمة المرور</button></div>`);
-  $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('change_password',{p_code:u.code,p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
+  $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('app_change_password',{p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
 
 // أداة تشخيص: افتح أي صفحة بإضافة #diag لعرض عدّاد التحميل وتغيّر الأبعاد
 if(location.hash=='#diag'){try{const k='dg',n=+(sessionStorage.getItem(k)||0)+1;sessionStorage.setItem(k,n);let rs=0,sc=0;const d=document.createElement('div');d.setAttribute('style','position:fixed;bottom:0;left:0;z-index:9999;background:#000c;color:#0f0;font:11px monospace;padding:6px 8px;direction:ltr;pointer-events:none');const nv=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0])||{},up=()=>{const v=window.visualViewport;d.textContent='nav:'+(nv.type||'?')+' redir:'+(nv.redirectCount||0)+' loads:'+n+' resize:'+rs+' scroll:'+sc+' inner:'+innerWidth+'x'+innerHeight+(v?' vv:'+Math.round(v.width)+'x'+Math.round(v.height):'')};addEventListener('resize',()=>{rs++;up()});addEventListener('scroll',()=>{sc++;up()});document.addEventListener('DOMContentLoaded',()=>{document.body.append(d);up()})}catch(e){}}
@@ -56,13 +66,6 @@ async function approveReq(x,msg){
   if(x.from_slot&&x.from_slot!=x.to_slot)await api(`enrollments?student_code=eq.${encodeURIComponent(x.student_code)}&slot_id=eq.${x.from_slot}`,'DELETE');
   await api('change_requests?id=eq.'+x.id,'PATCH',{status:'approved'});
   await notify([x.student_code],'تمت الموافقة على طلبك',msg||'تم نقلك إلى الجروب الجديد')}
-// قبول فوري لحظة إرسال الطلب (إن فعّله الأدمن): نفس الليفل + الكلاس لم يمتلئ
-async function tryAutoApprove(x){try{
-  const r=await api('rules?key=eq.auto_accept_requests');if(!(r[0]&&+r[0].value==1))return false;
-  const [[s],[g]]=await Promise.all([api('students?code=eq.'+encodeURIComponent(x.student_code)+'&select=level'),api('slots?id=eq.'+x.to_slot+'&select=id,level,capacity')]);
-  if(!s||!g||!lvN(s.level)||lvN(s.level)!=lvN(g.level))return false;
-  if(await count('enrollments','slot_id','&slot_id=eq.'+g.id)>=(g.capacity||35))return false;
-  await approveReq(x,'تمت الموافقة تلقائياً وتم نقلك إلى الجروب الجديد');return true}catch(e){return false}}
 // قبول كل الطلبات المعلّقة المؤهلة (slotIds: للمحاضر جروباته فقط، وبدونها للأدمن كل الجروبات)
 async function autoApprovePending(slotIds){
   let r=await api('change_requests?status=eq.pending&select=*,student:students(level)&order=id');
