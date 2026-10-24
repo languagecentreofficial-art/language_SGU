@@ -1,8 +1,7 @@
 const SB='https://qbeppmgyrxpyhzchswdw.supabase.co/rest/v1/';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZXBwbWd5cnhweWh6Y2hzd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NDcwOTksImV4cCI6MjEwNzIyMzA5OX0.mbgQV8L7moc5Xk39e7BokEAlbj69Ypp-zZI4MdhnJN4';
 // روابط المبرمج - عدّلها
-const SOCIAL={whatsapp:'https://wa.me/20XXXXXXXXXX',instagram:'https://instagram.com/XXXX',facebook:'https://facebook.com/XXXX'};
-const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const SOCIAL={whatsapp:'https://wa.me/01004335462',instagram:'https://www.instagram.com/mohamed_alsayid995?igsi=MW85ZnI1ZzdocTJiMg==',facebook:'https://www.facebook.com/share/19fn8XxSSa/'};const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 async function api(path,method='GET',body,prefer){
   prefer=prefer||(method=='POST'?'return=representation':'return=minimal');
   const r=await fetch(SB+path,{method,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',Prefer:prefer},body:body?JSON.stringify(body):undefined});
