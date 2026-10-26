@@ -1,9 +1,7 @@
 const SB='https://qbeppmgyrxpyhzchswdw.supabase.co/rest/v1/';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZXBwbWd5cnhweWh6Y2hzd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NDcwOTksImV4cCI6MjEwNzIyMzA5OX0.mbgQV8L7moc5Xk39e7BokEAlbj69Ypp-zZI4MdhnJN4';
-// روابط المبرمج - عدّلها
 const SOCIAL={whatsapp:'https://wa.me/01004335462',instagram:'https://www.instagram.com/mohamed_alsayid995?igsi=MW85ZnI1ZzdocTJiMg==',facebook:'https://www.facebook.com/share/19fn8XxSSa/'};
 const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-// كل الوصول لقاعدة البيانات يمر عبر بوابة الأمان gw (لا مفاتيح للجداول في المتصفح)
 const GW=SB.replace('/rest/v1/','/functions/v1/gw');
 async function gw(op,d){
   const u=JSON.parse(localStorage.getItem('u')||'null');
@@ -54,10 +52,8 @@ async function changePassForm(box,u){
   box.insertAdjacentHTML('beforeend',`<div class="card"><h3>تغيير كلمة المرور</h3><label>الحالية</label><input type="password" id="o"><label>الجديدة</label><input type="password" id="n"><button class="btn" id="cp">حفظ كلمة المرور</button></div>`);
   $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('change_password',{p_code:u.code,p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
 
-// أداة تشخيص: افتح أي صفحة بإضافة #diag لعرض عدّاد التحميل وتغيّر الأبعاد
 if(location.hash=='#diag'){try{const k='dg',n=+(sessionStorage.getItem(k)||0)+1;sessionStorage.setItem(k,n);let rs=0,sc=0;const d=document.createElement('div');d.setAttribute('style','position:fixed;bottom:0;left:0;z-index:9999;background:#000c;color:#0f0;font:11px monospace;padding:6px 8px;direction:ltr;pointer-events:none');const nv=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0])||{},up=()=>{const v=window.visualViewport;d.textContent='nav:'+(nv.type||'?')+' redir:'+(nv.redirectCount||0)+' loads:'+n+' resize:'+rs+' scroll:'+sc+' inner:'+innerWidth+'x'+innerHeight+(v?' vv:'+Math.round(v.width)+'x'+Math.round(v.height):'')};addEventListener('resize',()=>{rs++;up()});addEventListener('scroll',()=>{sc++;up()});document.addEventListener('DOMContentLoaded',()=>{document.body.append(d);up()})}catch(e){}}
 
-// ===== مساعدات: الليفل، القبول التلقائي، شروط النجاح =====
 const lvN=x=>String(x||'').trim().toUpperCase();
 function passNeed(ex){if(!ex||ex.pass_value==null||ex.pass_value==='')return null;return ex.pass_type=='mark'?+ex.pass_value:(+ex.max_mark)*(+ex.pass_value)/100}
 function passOf(mark,ex){const n=passNeed(ex);if(n==null||mark==null||mark==='')return null;return +mark>=n}
@@ -66,10 +62,8 @@ async function approveReq(x,msg){
   if(x.from_slot&&x.from_slot!=x.to_slot)await api(`enrollments?student_code=eq.${encodeURIComponent(x.student_code)}&slot_id=eq.${x.from_slot}`,'DELETE');
   await api('change_requests?id=eq.'+x.id,'PATCH',{status:'approved'});
   await notify([x.student_code],'تمت الموافقة على طلبك',msg||'تم نقلك إلى الجروب الجديد')}
-// قبول فوري لحظة إرسال الطلب (إن فعّله الأدمن): نفس الليفل + الكلاس لم يمتلئ
-async function tryAutoApprove(x){try{const r=await gw('auto_approve',{id:x.id});return !!(r&&r.ok)}catch(e){return false}}
-// قبول كل الطلبات المعلّقة المؤهلة (slotIds: للمحاضر جروباته فقط، وبدونها للأدمن كل الجروبات)
-async function autoApprovePending(slotIds){
+ async function tryAutoApprove(x){try{const r=await gw('auto_approve',{id:x.id});return !!(r&&r.ok)}catch(e){return false}}
+ async function autoApprovePending(slotIds){
   let r=await api('change_requests?status=eq.pending'+(slotIds&&slotIds.length?'&to_slot=in.('+slotIds.map(Number).join(',')+')':'')+'&select=*,student:students(level)&order=id');
   if(slotIds){const S=slotIds.map(Number);r=r.filter(x=>S.includes(+x.to_slot))}
   const ids=[...new Set(r.map(x=>x.to_slot))],done=[];if(!ids.length)return{ok:0,skip:0,done};
