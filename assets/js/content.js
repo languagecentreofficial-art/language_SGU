@@ -1,5 +1,4 @@
-/* ===== المحتوى التعليمي: مجلدات المحاضرين (يعتمد على app.js) =====
-   كل الأسماء العامة هنا تبدأ بـ ct حتى لا تتعارض مع بقية الملفات */
+
 const CT_BUCKET='fille',CT_ST=SB.replace('/rest/v1/','/storage/v1/'),ctq=encodeURIComponent;
 Object.assign(P,{folder:'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'});
 MAP['المحتوى']='folder';MAP['طلبات حذف المحتوى']='warn';DESC['المحتوى']='المواد والملفات التعليمية (فيديو، PDF، عروض، ملفات)';
@@ -29,7 +28,6 @@ function ctUpload(path,file,onp){return new Promise(async(ok,no)=>{
 async function ctRm(paths){for(let i=0;i<paths.length;i+=50)await gw('rm_files',{paths:paths.slice(i,i+50)})}
 const ctNotifyAdmins=(t,b)=>gw('notify_admins',{title:t,body:b}).catch(()=>{});
 
-// ===== إدارة مجلدات محاضر واحد (تُستخدم للمحاضر وللأدمن) =====
 async function ctManager(box,code,o,openIds){
  const keep=new Set([...(openIds||[]).map(String),...[...box.querySelectorAll('details[open]')].map(d=>d.dataset.d)]);
  const F=await api('content_folders?lecturer_code=eq.'+ctq(code)+'&order=id.desc');
@@ -74,12 +72,10 @@ async function ctManager(box,code,o,openIds){
    catch(er){alert('رُفع «'+f.name+'» لكن تعذر تسجيله: '+er.message);ctRm([path]).catch(()=>{})}}
   alert('تم رفع '+okN+' من '+files.length+' ملف');again([fid])}}
 
-// ===== تبويب المحاضر =====
 async function lecContentTab(b,u){try{
  b.innerHTML='<div class="msg">أنشئ مجلداً باسم مناسب ثم ارفع بداخله موادك. يظهر المجلد والملفات لطلاب كلاساتك فقط، ويمكنك إخفاء أو إظهار أي مجلد أو ملف في أي وقت. الحذف يتم بطلب موافقة الأدمن.</div><div id="ctm"></div>';
  await ctManager($('#ctm'),u.code,{u,adm:false})}catch(e){b.innerHTML=ctErr(e)}}
 
-// ===== تبويب الأدمن: الرفع لأي محاضر + التحميل الشامل =====
 const ctLoadZip=()=>window.JSZip?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=ok;s.onerror=()=>no(new Error('تعذر تحميل مكتبة الضغط، تأكد من الاتصال'));document.head.append(s)});
 async function ctZip(code,noVid,prog){
  await ctLoadZip();
@@ -104,7 +100,6 @@ async function adminContentTab(b){try{
  $('#ctl').onchange=()=>{const c=$('#ctl').value;if(!c){$('#ctm').innerHTML='';return}ctManager($('#ctm'),c,{u,adm:u.role=='admin'}).catch(e=>$('#ctm').innerHTML=ctErr(e))};
  $('#ctz1').onclick=()=>{const c=$('#ctl').value;if(!c)return alert('اختر المحاضر أولاً');run(c)};$('#ctzA').onclick=()=>run(null)}catch(e){b.innerHTML=ctErr(e)}}
 
-// ===== تبويب الأدمن: طلبات حذف المحتوى =====
 async function contentDelTab(b){try{
  const u=me(),[F,I]=await Promise.all([api('content_folders?del_req=eq.true&select=*,lec:staff(name)&order=del_at'),api('content_items?del_req=eq.true&select=*,folder:content_folders(name,lecturer_code,lec:staff(name))&order=del_at')]);
  const cnt={};if(F.length)(await ctAll('content_items?folder_id=in.('+F.map(f=>f.id).join(',')+')&select=folder_id')).forEach(x=>cnt[x.folder_id]=(cnt[x.folder_id]||0)+1);
@@ -117,7 +112,6 @@ async function contentDelTab(b){try{
    else{await api(tbl+'?id=eq.'+id,'PATCH',{del_req:false,del_by:null,del_at:null});if(lc)notify([lc],'تم رفض طلب الحذف','لم يُحذف: '+nm)}
    contentDelTab(b)}catch(er){alert(er.message)}}}catch(e){b.innerHTML=ctErr(e)}}
 
-// ===== تبويب الطالب =====
 async function stuContentTab(b,u){try{
  const en=await api('enrollments?student_code=eq.'+ctq(u.code)+'&select=slot:slots(lecturer_code)'),L=[...new Set(en.map(x=>x.slot&&x.slot.lecturer_code).filter(Boolean))];
  if(!L.length){b.innerHTML='<div class="msg">لا يوجد محتوى متاح حالياً.</div>';return}
