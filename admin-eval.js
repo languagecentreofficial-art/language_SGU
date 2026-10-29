@@ -123,3 +123,32 @@ async function hoursTab(b){
   try{const m=$('#hm').value||tz.slice(0,7),W=weeksOf(m),r=await gw('hours_report',{from:m+'-01',to:monthEnd(m),weeks:W.map(w=>({from:w[0],to:w[1]}))});cache.D={m,W,rows:r.rows};draw()}
   catch(e){$('#ho').innerHTML='<div class="msg">'+esc(e.message)+'</div>'}k.disabled=false};
  $('#hg').click()}
+
+
+/* ---------- كلاسات المحاضرين: كل محاضر في كل يوم على كم كلاس + عدد الكلاسات خلال الشهر ---------- */
+async function classesTab(b){
+ const tz=evToday(),HD=['السبت','الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
+ b.innerHTML=`<div class="card"><h3>كلاسات المحاضرين</h3><label>الشهر</label><input type="month" id="cm" value="${tz.slice(0,7)}"><label>نوع التقرير</label><select id="ct"><option value="s">ملخص: عدد كلاسات كل محاضر في كل يوم وخلال الشهر</option><option value="d">تفصيلي: كل كلاس على حدة</option></select><p class="note">الكلاس = جروب بيوم ووقت محدد مسند للمحاضر. «كلاسات الشهر» = عدد مرات انعقاد كلاساته المجدولة خلال الشهر، و«الفعلية» ما سُجّل فيه غياب فعلاً.</p><button class="btn" id="cg">عرض التقرير</button></div><div id="co"></div>`;
+ const ON={},cache={};
+ const build=(D,type)=>{
+  if(type=='s'){const L={};D.rows.forEach(s=>{const o=L[s.lecturer_code]=L[s.lecturer_code]||{name:s.lecturer_name,code:s.lecturer_code,groups:0,sessions:0,actual:0,list:{},...Object.fromEntries(HD.map(d=>['d_'+d,0]))};o.groups++;o['d_'+s.day]=(o['d_'+s.day]||0)+1;o.sessions+=s.sched;o.actual+=s.actual;(o.list[s.day]=o.list[s.day]||[]).push(`${s.place} (${s.start}-${s.end})`)});
+   const rows=Object.values(L).sort((a,c)=>String(a.name).localeCompare(String(c.name),'ar')).map(o=>({...o,details:HD.filter(d=>o.list[d]).map(d=>d+': '+o.list[d].join('، ')).join(' | ')}));
+   return{cols:[['name','المحاضر',1],['code','الكود',0],...HD.map(d=>['d_'+d,d,1]),['groups','إجمالي الكلاسات في الأسبوع',1],['sessions','كلاسات الشهر',1],['actual','الكلاسات الفعلية في الشهر',0],['details','تفاصيل الكلاسات (الكلاس والوقت)',0]],rows,sum:[...HD.map(d=>'d_'+d),'groups','sessions','actual']}}
+  const rows=D.rows.slice().sort((a,c)=>String(a.lecturer_name).localeCompare(String(c.lecturer_name),'ar')||HD.indexOf(a.day)-HD.indexOf(c.day)||a.start.localeCompare(c.start)).map(s=>({name:s.lecturer_name,code:s.lecturer_code,day:s.day,from:s.start,to:s.end,place:s.place,level:s.level,sessions:s.sched,actual:s.actual}));
+  return{cols:[['name','المحاضر',1],['code','الكود',0],['day','اليوم',1],['from','من',1],['to','إلى',1],['place','الكلاس',1],['level','الليفل',1],['sessions','كلاسات الشهر',1],['actual','فعلية',0]],rows,sum:['sessions','actual']}};
+ const val=(c,r)=>{const v=r[c];return typeof v=='number'?(c.startsWith('d_')&&!v?'-':String(Math.round(v*100)/100)):(v==null||v===''?'-':v)};
+ const draw=()=>{const D=cache.D,type=$('#ct').value,B=build(D,type);ON[type]=ON[type]||new Set(B.cols.filter(c=>c[2]).map(c=>c[0]));
+  const vis=()=>B.cols.filter(c=>ON[type].has(c[0])),tot={};B.sum.forEach(k=>tot[k]=B.rows.reduce((s,r)=>s+(+r[k]||0),0));
+  const cells=k=>B.rows.map(r=>k.map(c=>val(c[0],r))),foot=k=>k.map((c,i)=>i==0?'الإجمالي':(c[0] in tot?val(c[0],tot):''));
+  const tbl=k=>k.length?`<table class="table"><thead><tr>${k.map(c=>`<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${cells(k).map(r=>`<tr>${r.map((x,i)=>`<td>${i?esc(x):'<b>'+esc(x)+'</b>'}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${k.length}">لا توجد بيانات</td></tr>`}${B.rows.length?`<tr>${foot(k).map(x=>`<th>${esc(x)}</th>`).join('')}</tr>`:''}</tbody></table>`:'<div class="msg">اختر حقلاً واحداً على الأقل</div>';
+  $('#co').innerHTML=`<div class="card noprint"><h3>الحقول المطلوب إظهارها — ${esc(D.m)}</h3><div id="cc">${B.cols.map(c=>`<button type="button" class="chip ${ON[type].has(c[0])?'on':''}" data-k="${c[0]}">${esc(c[1])}</button>`).join('')}</div><button class="btn alt" id="csa" type="button">إظهار الكل</button><button class="btn alt" id="cna" type="button">إخفاء الكل</button><button class="btn" id="cp" type="button">طباعة / PDF</button><button class="btn" id="cx" type="button">تحميل Excel</button></div><div class="card wrap"><h3>${type=='s'?'كلاسات كل محاضر':'التقرير التفصيلي للكلاسات'} — ${esc(D.m)} (${B.rows.length} ${type=='s'?'محاضر':'كلاس'})</h3>${tbl(vis())}</div>`;
+  $('#cc').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ON[type].has(c.dataset.k)?ON[type].delete(c.dataset.k):ON[type].add(c.dataset.k);draw()});
+  $('#csa').onclick=()=>{B.cols.forEach(c=>ON[type].add(c[0]));draw()};$('#cna').onclick=()=>{ON[type].clear();draw()};
+  $('#cp').onclick=()=>{const k=vis();if(!k.length)return alert('اختر حقلاً واحداً على الأقل');printReport(type=='s'?'كلاسات المحاضرين — ملخص':'كلاسات المحاضرين — تفصيلي','الشهر '+D.m,tbl(k))};
+  $('#cx').onclick=()=>{const k=vis();if(!k.length)return alert('اختر حقلاً واحداً على الأقل');if(typeof XLSX=='undefined')return alert('مكتبة الإكسيل لم تُحمَّل');
+   const num=(c,r)=>typeof r[c]=='number'?r[c]:(r[c]==null?'':r[c]),wb=XLSX.utils.book_new();
+   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([k.map(c=>c[1]),...B.rows.map(r=>k.map(c=>num(c[0],r))),...(B.rows.length?[k.map((c,i)=>i==0?'الإجمالي':(c[0] in tot?tot[c[0]]:''))]:[])]),type=='s'?'Summary':'Classes');XLSX.writeFile(wb,'lecturer_classes_'+D.m+'_'+(type=='s'?'summary':'details')+'.xlsx')}};
+ $('#ct').onchange=()=>{if(cache.D)draw()};
+ $('#cg').onclick=async()=>{const k=$('#cg');k.disabled=true;$('#co').innerHTML='<div class="msg">جارٍ تحميل البيانات...</div>';
+  try{const m=$('#cm').value||tz.slice(0,7),r=await gw('hours_report',{from:m+'-01',to:monthEnd(m)});cache.D={m,rows:r.rows};draw()}catch(e){$('#co').innerHTML='<div class="msg">'+esc(e.message)+'</div>'}k.disabled=false};
+ $('#cg').click()}

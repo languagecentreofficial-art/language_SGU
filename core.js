@@ -112,4 +112,4 @@ function printReport(title,sub,tableHtml,w){
   printWin(`<div class="printarea"><div class="printhead"><img src="${logo}" height="56" alt=""><div><b>كورس اللغة الإنجليزية</b><br>جامعة الصالحية الجديدة<br>${esc(title)}<br><small>${esc(sub||'')}</small></div></div>${tableHtml}</div>`,title,'',w)}
 // جدول كامل للطباعة (رأس يتكرر في كل صفحة)
 function printTable(headers,rows){return `<table class="table"><thead><tr><th>#</th>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
-Object.assign(MAP,{'ساعات المحاضرين':'board'});
+Object.assign(MAP,{'ساعات المحاضرين':'board','كلاسات المحاضرين':'table'});
