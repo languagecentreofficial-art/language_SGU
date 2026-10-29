@@ -1,9 +1,8 @@
 const SB='https://qbeppmgyrxpyhzchswdw.supabase.co/rest/v1/';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZXBwbWd5cnhweWh6Y2hzd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NDcwOTksImV4cCI6MjEwNzIyMzA5OX0.mbgQV8L7moc5Xk39e7BokEAlbj69Ypp-zZI4MdhnJN4';
-// روابط المبرمج - عدّلها
-const SOCIAL={whatsapp:'https://wa.me/20XXXXXXXXXX',instagram:'https://instagram.com/XXXX',facebook:'https://facebook.com/XXXX'};
+const SOCIAL={whatsapp:'https://wa.me/01004335462',instagram:'https://www.instagram.com/mohamed_alsayid995?igsi=MW85ZnI1ZzdocTJiMg==',facebook:'https://www.facebook.com/share/19fn8XxSSa/'};
+
 const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-// كل الوصول لقاعدة البيانات يمر عبر بوابة الأمان gw (لا مفاتيح للجداول في المتصفح)
 const GW=SB.replace('/rest/v1/','/functions/v1/gw');
 async function gw(op,d){
   const u=JSON.parse(localStorage.getItem('u')||'null');
@@ -54,10 +53,8 @@ async function changePassForm(box,u){
   box.insertAdjacentHTML('beforeend',`<div class="card"><h3>تغيير كلمة المرور</h3><label>الحالية</label><input type="password" id="o"><label>الجديدة</label><input type="password" id="n"><button class="btn" id="cp">حفظ كلمة المرور</button></div>`);
   $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('change_password',{p_code:u.code,p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
 
-// أداة تشخيص: افتح أي صفحة بإضافة #diag لعرض عدّاد التحميل وتغيّر الأبعاد
 if(location.hash=='#diag'){try{const k='dg',n=+(sessionStorage.getItem(k)||0)+1;sessionStorage.setItem(k,n);let rs=0,sc=0;const d=document.createElement('div');d.setAttribute('style','position:fixed;bottom:0;left:0;z-index:9999;background:#000c;color:#0f0;font:11px monospace;padding:6px 8px;direction:ltr;pointer-events:none');const nv=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0])||{},up=()=>{const v=window.visualViewport;d.textContent='nav:'+(nv.type||'?')+' redir:'+(nv.redirectCount||0)+' loads:'+n+' resize:'+rs+' scroll:'+sc+' inner:'+innerWidth+'x'+innerHeight+(v?' vv:'+Math.round(v.width)+'x'+Math.round(v.height):'')};addEventListener('resize',()=>{rs++;up()});addEventListener('scroll',()=>{sc++;up()});document.addEventListener('DOMContentLoaded',()=>{document.body.append(d);up()})}catch(e){}}
 
-// ===== مساعدات: الليفل، القبول التلقائي، شروط النجاح =====
 const lvN=x=>String(x||'').trim().toUpperCase();
 function passNeed(ex){if(!ex||ex.pass_value==null||ex.pass_value==='')return null;return ex.pass_type=='mark'?+ex.pass_value:(+ex.max_mark)*(+ex.pass_value)/100}
 function passOf(mark,ex){const n=passNeed(ex);if(n==null||mark==null||mark==='')return null;return +mark>=n}
@@ -82,7 +79,6 @@ async function autoApprovePending(slotIds){
 Object.assign(MAP,{'التقييمات':'clip','تقييماتي':'chart','تسجيل غياب يدوي':'pen','الفصول الدراسية':'cal','نتائج التقييمات':'chart'});
 Object.assign(DESC,{'التقييمات':'قيّم طلاب جروباتك أسبوعياً وحمّل السجلات','تقييماتي':'نتائجك في الترم والعام الدراسي'});
 
-// ===== طباعة / PDF: نافذة نظيفة تحوي التقرير فقط (تطبع كل الصفوف بصفحات متعددة) =====
 const monthEnd=m=>{const [y,mo]=String(m).split('-').map(Number);return new Date(Date.UTC(y,mo,0)).toISOString().slice(0,10)};
 function openPrintWin(){const w=window.open('','_blank');if(w){try{w.document.write('<meta charset="utf-8"><body dir="rtl" style="font-family:Tahoma;padding:30px">جارٍ تجهيز التقرير...</body>')}catch(e){}}return w}
 function printWin(inner,title,extraCss,w){
