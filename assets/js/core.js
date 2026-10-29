@@ -1,7 +1,9 @@
 const SB='https://qbeppmgyrxpyhzchswdw.supabase.co/rest/v1/';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZXBwbWd5cnhweWh6Y2hzd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NDcwOTksImV4cCI6MjEwNzIyMzA5OX0.mbgQV8L7moc5Xk39e7BokEAlbj69Ypp-zZI4MdhnJN4';
-const SOCIAL={whatsapp:'https://wa.me/01004335462',instagram:'https://www.instagram.com/mohamed_alsayid995?igsi=MW85ZnI1ZzdocTJiMg==',facebook:'https://www.facebook.com/share/19fn8XxSSa/'};
+// روابط المبرمج - عدّلها
+const SOCIAL={whatsapp:'https://wa.me/20XXXXXXXXXX',instagram:'https://instagram.com/XXXX',facebook:'https://facebook.com/XXXX'};
 const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+// كل الوصول لقاعدة البيانات يمر عبر بوابة الأمان gw (لا مفاتيح للجداول في المتصفح)
 const GW=SB.replace('/rest/v1/','/functions/v1/gw');
 async function gw(op,d){
   const u=JSON.parse(localStorage.getItem('u')||'null');
@@ -52,8 +54,10 @@ async function changePassForm(box,u){
   box.insertAdjacentHTML('beforeend',`<div class="card"><h3>تغيير كلمة المرور</h3><label>الحالية</label><input type="password" id="o"><label>الجديدة</label><input type="password" id="n"><button class="btn" id="cp">حفظ كلمة المرور</button></div>`);
   $('#cp').onclick=async()=>{if($('#n').value.length<6)return alert('6 أحرف على الأقل');const ok=await rpc('change_password',{p_code:u.code,p_old:$('#o').value,p_new:$('#n').value});alert(ok?'تم تغيير كلمة المرور':'كلمة المرور الحالية غير صحيحة')}}
 
+// أداة تشخيص: افتح أي صفحة بإضافة #diag لعرض عدّاد التحميل وتغيّر الأبعاد
 if(location.hash=='#diag'){try{const k='dg',n=+(sessionStorage.getItem(k)||0)+1;sessionStorage.setItem(k,n);let rs=0,sc=0;const d=document.createElement('div');d.setAttribute('style','position:fixed;bottom:0;left:0;z-index:9999;background:#000c;color:#0f0;font:11px monospace;padding:6px 8px;direction:ltr;pointer-events:none');const nv=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0])||{},up=()=>{const v=window.visualViewport;d.textContent='nav:'+(nv.type||'?')+' redir:'+(nv.redirectCount||0)+' loads:'+n+' resize:'+rs+' scroll:'+sc+' inner:'+innerWidth+'x'+innerHeight+(v?' vv:'+Math.round(v.width)+'x'+Math.round(v.height):'')};addEventListener('resize',()=>{rs++;up()});addEventListener('scroll',()=>{sc++;up()});document.addEventListener('DOMContentLoaded',()=>{document.body.append(d);up()})}catch(e){}}
 
+// ===== مساعدات: الليفل، القبول التلقائي، شروط النجاح =====
 const lvN=x=>String(x||'').trim().toUpperCase();
 function passNeed(ex){if(!ex||ex.pass_value==null||ex.pass_value==='')return null;return ex.pass_type=='mark'?+ex.pass_value:(+ex.max_mark)*(+ex.pass_value)/100}
 function passOf(mark,ex){const n=passNeed(ex);if(n==null||mark==null||mark==='')return null;return +mark>=n}
@@ -62,8 +66,10 @@ async function approveReq(x,msg){
   if(x.from_slot&&x.from_slot!=x.to_slot)await api(`enrollments?student_code=eq.${encodeURIComponent(x.student_code)}&slot_id=eq.${x.from_slot}`,'DELETE');
   await api('change_requests?id=eq.'+x.id,'PATCH',{status:'approved'});
   await notify([x.student_code],'تمت الموافقة على طلبك',msg||'تم نقلك إلى الجروب الجديد')}
- async function tryAutoApprove(x){try{const r=await gw('auto_approve',{id:x.id});return !!(r&&r.ok)}catch(e){return false}}
- async function autoApprovePending(slotIds){
+// قبول فوري لحظة إرسال الطلب (إن فعّله الأدمن): نفس الليفل + الكلاس لم يمتلئ
+async function tryAutoApprove(x){try{const r=await gw('auto_approve',{id:x.id});return !!(r&&r.ok)}catch(e){return false}}
+// قبول كل الطلبات المعلّقة المؤهلة (slotIds: للمحاضر جروباته فقط، وبدونها للأدمن كل الجروبات)
+async function autoApprovePending(slotIds){
   let r=await api('change_requests?status=eq.pending'+(slotIds&&slotIds.length?'&to_slot=in.('+slotIds.map(Number).join(',')+')':'')+'&select=*,student:students(level)&order=id');
   if(slotIds){const S=slotIds.map(Number);r=r.filter(x=>S.includes(+x.to_slot))}
   const ids=[...new Set(r.map(x=>x.to_slot))],done=[];if(!ids.length)return{ok:0,skip:0,done};
@@ -72,3 +78,38 @@ async function approveReq(x,msg){
   for(const x of r){const g=sl[x.to_slot],l=lvN(x.student&&x.student.level);if(!g||!l||l!=lvN(g.level)||N[g.id]>=(g.capacity||35))continue;
     try{await approveReq(x,'تمت الموافقة على طلبك ونقلك إلى الجروب الجديد');N[g.id]++;done.push(x.id)}catch(e){}}
   return{ok:done.length,skip:r.length-done.length,done}}
+
+Object.assign(MAP,{'التقييمات':'clip','تقييماتي':'chart','تسجيل غياب يدوي':'pen','الفصول الدراسية':'cal','نتائج التقييمات':'chart'});
+Object.assign(DESC,{'التقييمات':'قيّم طلاب جروباتك أسبوعياً وحمّل السجلات','تقييماتي':'نتائجك في الترم والعام الدراسي'});
+
+// ===== طباعة / PDF: نافذة نظيفة تحوي التقرير فقط (تطبع كل الصفوف بصفحات متعددة) =====
+const monthEnd=m=>{const [y,mo]=String(m).split('-').map(Number);return new Date(Date.UTC(y,mo,0)).toISOString().slice(0,10)};
+function openPrintWin(){const w=window.open('','_blank');if(w){try{w.document.write('<meta charset="utf-8"><body dir="rtl" style="font-family:Tahoma;padding:30px">جارٍ تجهيز التقرير...</body>')}catch(e){}}return w}
+function printWin(inner,title,extraCss,w){
+  const heads=[...document.querySelectorAll('link[rel=stylesheet],style')].map(n=>n.tagName=='LINK'?`<link rel="stylesheet" href="${n.href}">`:n.outerHTML).join('');
+  const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>${heads}<style>
+@page{size:A4 landscape;margin:0}
+html,body{height:auto!important;min-height:0!important;display:block!important;margin:0!important;background:#fff!important;overflow:visible!important;max-width:none!important}
+body{padding:10mm!important;font-size:11px}
+table,.table{width:100%!important;max-width:100%!important;table-layout:auto;border-collapse:collapse}
+.table th,.table td,table th,table td{white-space:normal!important;overflow-wrap:break-word;word-break:normal;padding:4px 5px!important;font-size:10.5px!important;line-height:1.35;text-align:right;vertical-align:middle}
+.table th{font-weight:700}
+.table td:first-child,.table th:first-child{white-space:nowrap!important;width:1%}
+.noprint{display:none!important}
+.printarea{position:static!important;left:auto!important;width:auto!important;display:block!important}
+.printarea .printhead,.phd{display:flex!important;align-items:center;gap:16px;border-bottom:3px solid #d4a63a;padding-bottom:10px;margin-bottom:12px}
+.card{box-shadow:none!important;border:0!important;padding:0!important;margin:0 0 10px!important;background:#fff!important}
+.wrap{overflow:visible!important}
+table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pbar{background:#fffbe6;padding:10px;text-align:center;border-bottom:1px solid #d4a63a;margin-bottom:8px}@media print{.pbar{display:none}}
+${extraCss||''}</style></head><body><div class="pbar"><button onclick="print()" style="font:inherit;padding:8px 22px;font-weight:700;cursor:pointer">طباعة / حفظ PDF</button> <small>يُفتح مربع الطباعة تلقائياً، اختر «حفظ بصيغة PDF»</small></div>${inner}</body></html>`;
+  w=w||window.open('','_blank');if(!w){alert('اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة');return}
+  w.document.open();w.document.write(html);w.document.close();let done=false;const go=()=>{if(done)return;done=true;try{w.focus();w.print()}catch(e){}};
+  w.addEventListener('load',()=>setTimeout(go,400));setTimeout(go,2500)}
+function printReport(title,sub,tableHtml,w){
+  const logo=new URL('assets/logo.png',location.href).href;
+  printWin(`<div class="printarea"><div class="printhead"><img src="${logo}" height="56" alt=""><div><b>كورس اللغة الإنجليزية</b><br>جامعة الصالحية الجديدة<br>${esc(title)}<br><small>${esc(sub||'')}</small></div></div>${tableHtml}</div>`,title,'',w)}
+// جدول كامل للطباعة (رأس يتكرر في كل صفحة)
+function printTable(headers,rows){return `<table class="table"><thead><tr><th>#</th>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
+Object.assign(MAP,{'ساعات المحاضرين':'board'});

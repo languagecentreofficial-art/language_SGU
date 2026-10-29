@@ -7,12 +7,14 @@ const dayOf=v=>{const s=String(v).trim().toLowerCase(),k=s.length>=3&&Object.key
 const upBox=(b,title,hint,tplFn,run)=>{b.innerHTML=`<div class="card"><h3>${title}</h3><p>${hint}</p><input type="file" id="f" accept=".xlsx,.xls,.csv"><button class="btn alt" id="go">رفع وتنفيذ</button> <button class="btn" id="tp">تحميل القالب</button></div>`;$('#tp').onclick=tplFn;$('#go').onclick=async()=>{const f=$('#f').files[0];if(!f)return alert('اختر ملفاً');try{alert(await run(await rd(f)))}catch(e){alert('خطأ: '+e.message)}}};
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
 
+// ===== رفع الطلاب فقط =====
 const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمدة: Code, Name, Phone, Faculty, Level, Section, Place، والاختيارية: Day, From, To لتحديد الجروب بدقة عندما يتكرر الكلاس في أكثر من يوم. الخلية الفارغة تُبقي القيمة القديمة، وكلمة المرور = الكود للجدد. عند وجود Place يُنقل الطالب فوراً إلى جروب هذا الكلاس في الجداول (بدون أي شروط ليفل أو سعة) ويُحذف من جروبه القديم.',
  ()=>dl([['Code','Name','Phone','Faculty','Level','Section','Place','Day','From','To'],['261541','اسم الطالب','01000000000','Computer Science','B2','Section A1','Class 0022','Monday','9:00 AM','11:00 AM']],'students_template.xlsx'),
  async rows=>{const [oldL,sl,en]=await Promise.all([all('students?select=code,name,phone,college,level,section,place,is_new'),all('slots?select=id,day,start_time,end_time,place,level'),all('enrollments?select=slot_id,student_code')]);
   const old=Object.fromEntries(oldL.map(s=>[s.code,s])),R=rows.filter(r=>S(r.Code));
   const out=[...new Map(R.map(r=>{const c=S(r.Code),o=old[c]||{};return[c,{code:c,name:S(r.Name)||o.name||c,phone:S(r.Phone)||o.phone||null,college:S(r.Faculty)||o.college||null,level:S(r.Level)||o.level||null,section:S(r.Section)||o.section||null,place:S(r.Place)||o.place||null,is_new:o.code?o.is_new:true}]})).values()];
   const nw=out.filter(r=>!old[r.code]).map(r=>({...r,is_new:true})),ex=out.filter(r=>old[r.code]).map(({is_new,...r})=>r);if(nw.length)await api('students','POST',nw,'return=minimal');if(ex.length)await api('students?on_conflict=code','POST',ex,'resolution=merge-duplicates,return=minimal');
+  // ===== مزامنة التسكين (enrollments) مع الكلاس المرفوع =====
   const SM=Object.fromEntries(sl.map(s=>[s.id,s])),cur={};en.forEach(e=>(cur[e.student_code]=cur[e.student_code]||[]).push(e.slot_id));
   const del=[],add=[],bad=[],amb=[];let same=0;
   for(const r of R){const pl=S(r.Place);if(!pl)continue;const c=S(r.Code),K=nzp(pl);let cand=sl.filter(s=>nzp(s.place)==K),dy=null,fr=null;
@@ -36,9 +38,11 @@ const studentsUploadTab=b=>upBox(b,'رفع / تحديث طلاب','الأعمد�
   if(mvC.length)await notify(mvC,'تحديث الجدول','تم تحديث كلاسك وجدولك، راجع جدولك');
   return`طلاب جدد: ${nw.length} (كلمة المرور = الكود) — موجودون: ${ex.length} (كلمة المرور لم تتغير)\nتم تحديث التسكين في الجداول: ${mvC.length} طالب (نُقلوا: ${del.length})\nكانوا في الكلاس نفسه أصلاً: ${same}${amb.length?'\nاختيار تلقائي عند تعدد الجروبات ('+amb.length+') — يمكن تحديد Day/From/To في الملف لتفادي ذلك:\n'+amb.slice(0,15).join('\n')+(amb.length>15?'\n...':''):''}${bad.length?'\nلم يُسكَّنوا ('+bad.length+'):\n'+bad.slice(0,20).join('\n')+(bad.length>20?'\n...':''):''}`});
 
+// ===== رفع المحاضرين والتوقيتات =====
 const LA={code:['code','كود','الكود','lecturercode'],name:['name','الاسم','اسم'],phone:['phone','mobile','tel','الهاتف','رقمالهاتف'],role:['role','الصلاحية'],day:['day','اليوم'],from:['from','start','starttime','من'],to:['to','end','endtime','الى','إلى'],cls:['class','classroom','room','place','كلاس','الكلاس'],level:['level','englishlevel','الليفل']};
 const lecRow=r=>{const K={};Object.keys(r).forEach(k=>K[k.toLowerCase().replace(/[\s_.\-]/g,'')]=r[k]);const o={};for(const f in LA){const k=LA[f].find(n=>K[n]!=null&&K[n]!=='');o[f]=k?K[k]:null}return o};
 const mins=t=>{const [h,m]=String(t).split(':');return +h*60+ +m};
+// مطابقة الجروب: نفس اليوم + نفس الكلاس، ثم التوقيت (مطابق تماماً أو متداخل)
 const lecMatch=(sl,d,f,t,p)=>{const same=sl.filter(s=>s.day==d&&nzp(s.place)==nzp(p));
  let hit=same.filter(s=>mins(fmt(s.start_time))==mins(f)&&mins(fmt(s.end_time))==mins(t));if(hit.length)return{hit,how:'exact'};
  hit=same.filter(s=>mins(fmt(s.start_time))<mins(t)&&mins(fmt(s.end_time))>mins(f));if(hit.length)return{hit,how:'overlap'};
@@ -61,9 +65,10 @@ const lecTab=b=>{upBox(b,'رفع / تحديث المحاضرين وتوقيتا�
   return`محاضرون جدد: ${nu} — موجودون: ${up}\nربط مطابق للوقت: ${ex} جروب\nربط بوقت متداخل: ${ov} جروب\nجروبات جديدة أُنشئت: ${cr.length}${cr.length?'\n'+cr.join('\n'):''}\nصفوف بلا يوم/وقت (حسابات فقط): ${noT}\nلم تُربط (${sk.length}):${sk.length?'\n'+sk.join('\n'):''}`});
  b.querySelector('#tp').insertAdjacentHTML('beforebegin','<label style="display:block;margin:10px 0"><input type="checkbox" id="mk"> إنشاء جروب جديد عند عدم وجود جروب مطابق (الافتراضي: ربط المحاضر فقط)</label>')};
 
+// ===== الدرجات =====
 async function gradesTab(b){
  const ex=await api('exams?order=id');
- b.innerHTML=`<div class="card"><h3>إنشاء اختبار / تقييم</h3><label>الاسم</label><input id="en"><label>النوع</label><select id="ek"><option value="quiz">كويز</option><option value="midterm">اختبار فصلي</option><option value="final">اختبار نهاية العام</option><option value="weekly">تقييم أسبوعي</option><option value="monthly">تقييم شهري</option></select><label>الدرجة العظمى</label><input id="em" type="number" value="10"><button class="btn" id="ea">إضافة</button></div>
+ b.innerHTML=`<div class="card"><h3>إنشاء اختبار / تقييم</h3><label>الاسم</label><input id="en"><label>النوع</label><select id="ek"><option value="quiz">كويز</option><option value="midterm">ميد تيرم (اختبار فصلي)</option><option value="final">اختبار نهائي (نهاية الترم)</option><option value="weekly">تقييم أسبوعي</option><option value="monthly">تقييم شهري</option></select><label>الدرجة العظمى</label><input id="em" type="number" value="10"><p class="note">لاختبار الميد تيرم أو النهائي: اختر النوع المناسب (أو ارفعه من ملف)، ثم اربطه بالترم من تبويب «الفصول الدراسية». كل ترم يرتبط باختباره الخاص فلا يحدث أي تداخل بين الأترام.</p><button class="btn" id="ea">إضافة</button></div>
  <div class="card"><h3>الاختبارات الحالية</h3>${ex.map(e=>`<span class="pill">${esc(e.name)} (${e.max_mark}) · <a href="#" data-p="${e.id}" data-v="${e.published?0:1}">${e.published?'منشور — إخفاء':'مخفي — نشر'}</a> <a href="#" data-d="${e.id}" class="bad">✕</a></span> `).join('')||'لا يوجد'}</div><div id="up"></div>`;
  $('#ea').onclick=async()=>{await api('exams','POST',{name:$('#en').value,kind:$('#ek').value,max_mark:+$('#em').value},'return=minimal');gradesTab(b)};
  b.querySelectorAll('[data-p]').forEach(a=>a.onclick=async e=>{e.preventDefault();const v=a.dataset.v=='1';await api('exams?id=eq.'+a.dataset.p,'PATCH',{published:v});if(v){const x=ex.find(q=>q.id==a.dataset.p);notify((await all('students?select=code')).map(q=>q.code),'تم نشر درجات',x.name)}gradesTab(b)});
@@ -77,17 +82,19 @@ async function gradesTab(b){
    await api('grades?on_conflict=exam_id,student_code','POST',g,'resolution=merge-duplicates,return=minimal');
    return`تم رفع ${g.length} درجة، وتخطي ${skip} كود غير مسجل`})}
 
+// ===== شروط الغياب والإنذارات =====
 async function rulesTab(b){
  const R=Object.fromEntries((await api('rules')).map(r=>[r.key,r.value])),mo=today().slice(0,7);
  b.innerHTML=`<div class="card"><h3>شروط احتساب الغياب</h3><label>أقل عدد أيام حضور في الشهر قبل الإنذار</label><input id="r1" type="number" value="${R.min_days_per_month??4}"><label>درجة اليوم الواحد</label><input id="r2" type="number" step="0.1" value="${R.mark_per_day??0.5}"><button class="btn" id="sv">حفظ الشروط</button></div><div class="card"><h3>الإنذارات</h3><label>الشهر</label><input id="mo" type="month" value="${mo}"><div id="w" class="wrap"></div></div>`;
  $('#sv').onclick=async()=>{await api('rules?on_conflict=key','POST',[{key:'min_days_per_month',value:+$('#r1').value},{key:'mark_per_day',value:+$('#r2').value}],'resolution=merge-duplicates,return=minimal');alert('تم');rulesTab(b)};
- const show=async()=>{const m=$('#mo').value,[st,at]=await Promise.all([all('students?select=code,name,level&order=name'),all(`attendance?date=gte.${m}-01&date=lte.${m}-31&select=student_code,present`)]);
+ const show=async()=>{const m=$('#mo').value,[st,at]=await Promise.all([all('students?select=code,name,level&order=name'),all(`attendance?date=gte.${m}-01&date=lte.${monthEnd(m)}&select=student_code,present`)]);
   const c={};at.forEach(a=>{c[a.student_code]=c[a.student_code]||{p:0,a:0};a.present?c[a.student_code].p++:c[a.student_code].a++});
   const min=R.min_days_per_month??4,mk=R.mark_per_day??0.5,rows=st.filter(s=>c[s.code]).map(s=>({...s,p:c[s.code].p,a:c[s.code].a,w:c[s.code].p<min}));
   $('#w').innerHTML=`<table class="table"><tr><th>الكود</th><th>الاسم</th><th>حضور</th><th>غياب</th><th>درجة الحضور</th><th></th></tr>${rows.map(r=>`<tr><td>${r.code}</td><td>${esc(r.name)}</td><td>${r.p}</td><td>${r.a}</td><td>${(r.p*mk).toFixed(1)}</td><td>${r.w?'<span class="bad">⚠ إنذار</span>':''}</td></tr>`).join('')}</table><button class="btn no" id="nw">إرسال الإنذار للمنذَرين (${rows.filter(r=>r.w).length})</button>`;
   $('#nw').onclick=async()=>{await notify(rows.filter(r=>r.w).map(r=>r.code),'إنذار حضور','حضورك أقل من '+min+' أيام في شهر '+m);alert('تم الإرسال')}};
  $('#mo').onchange=show;show()}
 
+// ===== نقل الطلاب وتعديل الجداول =====
 async function moveTab(b){
  const sl=await all('slots?select=*,lec:staff(name)&order=day,start_time'),lec=await api('staff?role=eq.lecturer&select=code,name');
  const lb=s=>`${s.day} ${fmt(s.start_time)}-${fmt(s.end_time)} | ${esc(s.place)} | ${esc(s.level)}`,opt=sel=>sl.map(s=>`<option value="${s.id}" ${s.id==sel?'selected':''}>${lb(s)}</option>`).join('');
@@ -101,15 +108,17 @@ async function moveTab(b){
  $('#mv').onclick=async()=>{const c=[...document.querySelectorAll('.stud.p')].map(d=>d.dataset.c);if(!c.length)return alert('حدد طلاباً');const from=$('#a').value,to=$('#t').value;if(from==to)return;
   await api(`enrollments?slot_id=eq.${from}&student_code=in.(${c.join(',')})`,'DELETE',null,'return=minimal');await api('enrollments?on_conflict=student_code,slot_id','POST',c.map(x=>({student_code:x,slot_id:+to})),'resolution=merge-duplicates,return=minimal');await notify(c,'تم نقلك','تم تعديل جدولك');alert('تم النقل');load()}}
 
+// ===== تعديل الغياب (للأدمن، أي يوم) =====
 async function attTab(b){
  if(me().role!='admin'){b.innerHTML='<div class="msg">للأدمن فقط</div>';return}
  const sl=await all('slots?order=day,start_time');
  b.innerHTML=`<div class="card"><label>الجروب</label><select id="a">${sl.map(s=>`<option value="${s.id}">${s.day} ${fmt(s.start_time)} | ${esc(s.place)}</option>`).join('')}</select><label>التاريخ</label><input type="date" id="dt" value="${today()}"></div><div id="l"></div>`;
- const load=async()=>{const id=$('#a').value,d=$('#dt').value;const [en,at]=await Promise.all([api('enrollments?slot_id=eq.'+id+'&select=student:students(code,name)'),api(`attendance?slot_id=eq.${id}&date=eq.${d}`)]);const on=new Set(at.filter(x=>x.present).map(x=>x.student_code));
+ const load=async()=>{const id=$('#a').value,d=$('#dt').value;const en=await api('enrollments?slot_id=eq.'+id+'&select=student:students(code,name)');const at=en.length?await api(`attendance?date=eq.${d}&student_code=in.(${en.map(e=>encodeURIComponent(e.student.code)).join(',')})`):[];const SO=Object.fromEntries(at.map(x=>[x.student_code,x.slot_id]));const on=new Set(at.filter(x=>x.present).map(x=>x.student_code));
   $('#l').innerHTML=en.map(e=>`<div class="stud ${on.has(e.student.code)?'p':''}" data-c="${e.student.code}" onclick="this.classList.toggle('p')">${esc(e.student.name)}<small>${e.student.code}</small></div>`).join('')+'<button class="btn alt" id="sv">حفظ</button>';
-  $('#sv').onclick=async()=>{await api('attendance?on_conflict=student_code,slot_id,date','POST',[...document.querySelectorAll('.stud')].map(x=>({student_code:x.dataset.c,slot_id:+id,date:d,present:x.classList.contains('p'),marked_by:me().code})),'resolution=merge-duplicates,return=minimal');alert('تم')}};
+  $('#sv').onclick=async()=>{await api('attendance?on_conflict=student_code,date','POST',[...document.querySelectorAll('.stud')].map(x=>({student_code:x.dataset.c,slot_id:SO[x.dataset.c]||+id,date:d,present:x.classList.contains('p'),marked_by:me().code})),'resolution=merge-duplicates,return=minimal');alert('تم')}};
  $('#a').onchange=$('#dt').onchange=load;load()}
 
+// ===== الصلاحيات: اختيار الشخص ثم منحه أي عدد من الصفات والأقسام =====
 async function permTab(b){
  if(me().role!='admin'){b.innerHTML='<div class="msg">للأدمن فقط</div>';return}
  const as=await api('staff?select=code,name,role,roles,perms&order=name'),R=[['admin','أدمن'],['assistant','مساعد أدمن'],['affairs','شؤون الطلاب'],['lecturer','محاضر']],PRI=R.map(x=>x[0]),T=TABNAMES.filter(t=>!['الصلاحيات','حسابات'].includes(t));
