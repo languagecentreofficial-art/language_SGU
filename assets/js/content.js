@@ -33,19 +33,22 @@ const ctNotifyAdmins=(t,b)=>gw('notify_admins',{title:t,body:b}).catch(()=>{});
 async function ctManager(box,code,o,openIds){
  const keep=new Set([...(openIds||[]).map(String),...[...box.querySelectorAll('details[open]')].map(d=>d.dataset.d)]);
  const F=await api('content_folders?lecturer_code=eq.'+ctq(code)+'&order=id.desc');
+ const LV=[...new Set((await api('slots?lecturer_code=eq.'+ctq(code)+'&select=level').catch(()=>[])).map(s=>String(s.level||'').trim().toUpperCase()).filter(Boolean))].sort();
  const I=F.length?await ctAll('content_items?folder_id=in.('+F.map(f=>f.id).join(',')+')&order=id'):[];
  const by={};I.forEach(i=>(by[i.folder_id]=by[i.folder_id]||[]).push(i));
  const bad='style="background:#fde2e6;color:#b3263f"';
  const fdel=f=>o.adm?`<button type="button" class="chip" data-fa="rm" data-f="${f.id}">حذف المجلد نهائياً</button>`:f.del_req?`<button type="button" class="chip" data-fa="undo" data-f="${f.id}">إلغاء طلب حذف المجلد</button>`:`<button type="button" class="chip" data-fa="req" data-f="${f.id}">طلب حذف المجلد</button>`;
  const idel=i=>o.adm?`<button type="button" class="chip" data-ia="rm" data-i="${i.id}">حذف نهائي</button>`:i.del_req?`<button type="button" class="chip" data-ia="undo" data-i="${i.id}">إلغاء طلب الحذف</button>`:`<button type="button" class="chip" data-ia="req" data-i="${i.id}">طلب حذف</button>`;
- const row=i=>`<tr><td>${ctIcon(i.file_name)} <b>${esc(i.title)}</b>${i.del_req?` <span class="pill" ${bad}>طلب حذف بانتظار الأدمن</span>`:''}<br><small>${esc(i.file_name)}</small></td><td>${ctSz(i.size)}</td><td>${(i.created_at||'').slice(0,10)}</td><td>${i.visible?'<b class="ok">ظاهر</b>':'<b class="bad">مخفي</b>'}</td><td><a class="chip" href="${ctOpen(i)}" target="_blank" rel="noopener">فتح</a><button type="button" class="chip" data-ia="vis" data-i="${i.id}">${i.visible?'إخفاء':'إظهار'}</button><button type="button" class="chip" data-ia="ren" data-i="${i.id}">تسمية</button>${idel(i)}</td></tr>`;
+ const lvEdit=i=>LV.length?'<div class="lvs">'+LV.map(l=>`<label class="chk"><input type="checkbox" data-lvi="${i.id}" value="${esc(l)}" ${(!i.levels||!i.levels.length||i.levels.includes(l))?'checked':''}> ${esc(l)}</label>`).join('')+'</div>':'<small>—</small>';
+ const row=i=>`<tr><td>${ctIcon(i.file_name)} <b>${esc(i.title)}</b>${i.del_req?` <span class="pill" ${bad}>طلب حذف بانتظار الأدمن</span>`:''}<br><small>${esc(i.file_name)}</small></td><td>${ctSz(i.size)}</td><td>${(i.created_at||'').slice(0,10)}</td><td>${i.visible?'<b class="ok">ظاهر</b>':'<b class="bad">مخفي</b>'}</td><td>${lvEdit(i)}</td><td><a class="chip" href="${ctOpen(i)}" target="_blank" rel="noopener">فتح</a><button type="button" class="chip" data-ia="vis" data-i="${i.id}">${i.visible?'إخفاء':'إظهار'}</button><button type="button" class="chip" data-ia="ren" data-i="${i.id}">تسمية</button>${idel(i)}</td></tr>`;
  box.innerHTML=`<div class="card"><h3>إنشاء مجلد جديد</h3><input id="ctn" placeholder="اسم المجلد، مثال: المحاضرة الأولى"><button class="btn" id="ctadd">إنشاء المجلد</button></div>`+
  (F.map(f=>{const A=by[f.id]||[];return`<div class="card"><div class="sh2"><b>📁 ${esc(f.name)}</b><span class="pill">${A.length} ملف</span><span class="pill" ${f.visible?'':bad}>${f.visible?'ظاهر للطلاب':'مخفي عن الطلاب'}</span>${f.del_req?`<span class="pill" ${bad}>طلب حذف بانتظار الأدمن</span>`:''}</div>
  <div><button type="button" class="chip" data-fa="vis" data-f="${f.id}">${f.visible?'إخفاء المجلد':'إظهار المجلد'}</button><button type="button" class="chip" data-fa="ren" data-f="${f.id}">تغيير الاسم</button>${fdel(f)}</div>
  <details data-d="${f.id}" ${keep.has(String(f.id))?'open':''}><summary>رفع وإدارة الملفات</summary>
  <div style="margin:10px 0"><label class="chk"><input type="checkbox" data-vis="${f.id}" checked> إظهار الملفات للطلاب فور رفعها</label></div>
+ ${LV.length?`<div style="margin:10px 0"><b>ظهور الملفات الجديدة للطلاب أصحاب الليفل:</b><div class="lvs">${LV.map(l=>`<label class="chk"><input type="checkbox" data-lvup="${f.id}" value="${esc(l)}" checked> ${esc(l)}</label>`).join('')}</div><small class="note">الليفلات المأخوذة من جروباتك. يمكنك تغيير ليفلات أي ملف لاحقاً من الجدول.</small></div>`:''}
  <input type="file" multiple data-up="${f.id}"><div id="pg${f.id}" class="note"></div>
- <div class="wrap"><table class="table"><tr><th>الملف</th><th>الحجم</th><th>التاريخ</th><th>الحالة</th><th></th></tr>${A.map(row).join('')||'<tr><td colspan="5">لا توجد ملفات بعد</td></tr>'}</table></div></details></div>`}).join('')||'<div class="msg">لا توجد مجلدات بعد. أنشئ مجلداً ثم ارفع بداخله.</div>');
+ <div class="wrap"><table class="table"><tr><th>الملف</th><th>الحجم</th><th>التاريخ</th><th>الحالة</th><th>يظهر لليفل</th><th></th></tr>${A.map(row).join('')||'<tr><td colspan="6">لا توجد ملفات بعد</td></tr>'}</table></div></details></div>`}).join('')||'<div class="msg">لا توجد مجلدات بعد. أنشئ مجلداً ثم ارفع بداخله.</div>');
  const again=ids=>ctManager(box,code,o,ids);
  box.onclick=async e=>{const t=e.target.closest('#ctadd,button[data-fa],button[data-ia]');if(!t)return;
   try{
@@ -65,12 +68,16 @@ async function ctManager(box,code,o,openIds){
     else if(a=='rm'){if(!confirm('حذف «'+i.title+'» نهائياً؟'))return;await ctRm([i.file_path]);await api('content_items?id=eq.'+i.id,'DELETE')}
     return again([i.folder_id])}
   }catch(er){alert(er.message)}};
- box.onchange=async e=>{const t=e.target;if(!t.dataset||!t.dataset.up||!t.files.length)return;
-  const fid=+t.dataset.up,files=[...t.files],vis=box.querySelector(`[data-vis="${fid}"]`).checked,pg=box.querySelector('#pg'+fid);let okN=0;t.disabled=true;
+ box.onchange=async e=>{const t=e.target;
+  if(t&&t.dataset&&t.dataset.lvi){const id=t.dataset.lvi,sel=[...box.querySelectorAll('[data-lvi="'+id+'"]:checked')].map(x=>x.value);if(!sel.length){t.checked=true;return alert('اختر ليفلاً واحداً على الأقل')}
+   try{await api('content_items?id=eq.'+id,'PATCH',{levels:sel.length==LV.length?null:sel})}catch(er){t.checked=!t.checked;alert(er.message)}return}
+  if(!t.dataset||!t.dataset.up||!t.files.length)return;
+  const fid=+t.dataset.up,lvs=[...box.querySelectorAll('[data-lvup="'+fid+'"]:checked')].map(x=>x.value);if(LV.length&&!lvs.length){t.value='';return alert('اختر ليفلاً واحداً على الأقل لظهور الملفات')}
+  const lvl=LV.length&&lvs.length<LV.length?lvs:null,files=[...t.files],vis=box.querySelector(`[data-vis="${fid}"]`).checked,pg=box.querySelector('#pg'+fid);let okN=0;t.disabled=true;
   for(let k=0;k<files.length;k++){const f=files[k],path=fid+'/'+ctRand()+'.'+(ctExt(f.name)||'bin'),pre=`(${k+1}/${files.length}) ${esc(f.name)} — `;
    pg.innerHTML=pre+'0%';
    try{await ctUpload(path,f,p=>pg.innerHTML=pre+Math.round(p*100)+'% <progress max="100" value="'+Math.round(p*100)+'"></progress>')}catch(er){alert('تعذر رفع «'+f.name+'»:\n'+er.message);continue}
-   try{await api('content_items','POST',{folder_id:fid,title:f.name.replace(/\.[^.]+$/,'')||f.name,file_path:path,file_name:f.name,mime:f.type||CT_MIME[ctExt(f.name)]||null,size:f.size,visible:vis,uploaded_by:o.u.code},'return=minimal');okN++}
+   try{await api('content_items','POST',{folder_id:fid,title:f.name.replace(/\.[^.]+$/,'')||f.name,file_path:path,file_name:f.name,mime:f.type||CT_MIME[ctExt(f.name)]||null,size:f.size,visible:vis,uploaded_by:o.u.code,...(lvl?{levels:lvl}:{})},'return=minimal');okN++}
    catch(er){alert('رُفع «'+f.name+'» لكن تعذر تسجيله: '+er.message);ctRm([path]).catch(()=>{})}}
   alert('تم رفع '+okN+' من '+files.length+' ملف');again([fid])}}
 

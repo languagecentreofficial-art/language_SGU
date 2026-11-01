@@ -113,3 +113,7 @@ function printReport(title,sub,tableHtml,w){
 // جدول كامل للطباعة (رأس يتكرر في كل صفحة)
 function printTable(headers,rows){return `<table class="table"><thead><tr><th>#</th>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
 Object.assign(MAP,{'ساعات المحاضرين':'board','كلاسات المحاضرين':'table'});
+
+const ATT_BLOCK='محجوب بسبب عدم تجاوز نسبة الحضور';
+Object.assign(MAP,{'غياب جروباتي':'check','نسبة الحضور':'warn'});
+Object.assign(DESC,{'غياب جروباتي':'نسب حضور طلاب جروباتك والإنذارات'});
